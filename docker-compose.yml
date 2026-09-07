@@ -1,12 +1,13 @@
+# Lokaler Build/Betrieb (Docker Desktop / Linux). Für TrueNAS: docker-compose.truenas.yml
 services:
-  debra-web:
+  tsst-auswertung:
     build: .
-    image: auswertung-tsst:latest
-    container_name: auswertung-tsst
+    image: tsst-auswertung:latest
+    container_name: tsst-auswertung
     ports:
-      - "5000:5000"          # Host:Container – bei Bedarf Host-Port ändern
+      - "5000:5000"          # Host:Container – Host-Port bei Bedarf ändern
     volumes:
-      - debra-data:/data     # persistente SQLite-Datenbank
+      - tsst-data:/data      # persistente SQLite-Datenbank
     environment:
       DEBRA_DB: /data/debra.sqlite3
       DEBRA_SECRET: "bitte-hier-einen-eigenen-zufallswert-setzen"
@@ -15,4 +16,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  debra-data:
+  tsst-data:

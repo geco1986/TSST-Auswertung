@@ -58,16 +58,14 @@ docker run -d --name auswertung-tsst -p 5000:5000 \
 ```
 
 ## TrueNAS SCALE
-**Variante A – Custom App per YAML (empfohlen):**
-Apps → *Discover Apps* → *Custom App* → *Install via YAML* und den Inhalt von
-`docker-compose.yml` einfügen (Volume ggf. auf ein Dataset/Host-Pfad zeigen
-lassen, z. B. `- /mnt/pool/apps/tsst:/data`). Danach installieren.
+Fertiges Image: **`ghcr.io/geco1986/tsst-auswertung:latest`** – ausführliche
+Schritt-für-Schritt-Anleitung in **[TRUENAS.md](TRUENAS.md)**, passende Vorlage
+in **`docker-compose.truenas.yml`**.
 
-**Variante B – fertiges Image aus GHCR:**
-Nach dem ersten Push baut der GitHub-Workflow ein Image nach
-`ghcr.io/<OWNER>/<REPO>:latest`. In TrueNAS als Image dieses angeben, Port
-`5000`, ein Host-Pfad-Volume auf `/data`, Umgebungsvariable `DEBRA_SECRET`
-setzen.
+Kurz: Dataset (z. B. `pool/apps/tsst-auswertung`) anlegen → Apps → *Custom App* →
+*Install via YAML* → Inhalt von `docker-compose.truenas.yml` einfügen (Volume-Pfad
+und `DEBRA_SECRET` anpassen) → installieren → `http://<TrueNAS-IP>:5000`.
+Das GHCR-Paket muss dafür **öffentlich** sein (siehe TRUENAS.md).
 
 ## Konfiguration (Umgebungsvariablen)
 | Variable        | Default                | Bedeutung |

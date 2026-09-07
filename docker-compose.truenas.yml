@@ -1,0 +1,24 @@
+# TrueNAS SCALE – Custom App (Install via YAML)
+# ------------------------------------------------------------------
+# 1) In TrueNAS zuerst ein Dataset anlegen, z. B.  pool/apps/tsst-auswertung
+# 2) Apps -> Discover Apps -> (oben rechts) Custom App -> "Install via YAML"
+# 3) Diesen Inhalt einfügen, den Volume-Pfad unten an dein Dataset anpassen,
+#    DEBRA_SECRET auf einen eigenen Zufallswert setzen -> Install.
+# 4) App-Web-UI:  http://<TrueNAS-IP>:5000   (Login: Rolle wählen)
+#
+# Voraussetzung: das Image ist in GHCR öffentlich (siehe TRUENAS.md).
+# ------------------------------------------------------------------
+services:
+  tsst-auswertung:
+    image: ghcr.io/geco1986/tsst-auswertung:latest
+    container_name: tsst-auswertung
+    restart: unless-stopped
+    ports:
+      - "5000:5000"                 # Host:Container – Host-Port bei Bedarf ändern
+    volumes:
+      - /mnt/POOL/apps/tsst-auswertung:/data   # <-- an dein TrueNAS-Dataset anpassen
+    environment:
+      DEBRA_DB: /data/debra.sqlite3
+      DEBRA_SECRET: "BITTE-EIGENEN-ZUFALLSWERT-SETZEN"
+      DEBRA_SEED: "1"               # 1 = bei leerer DB Demo-Daten, 0 = leer starten
+      PORT: "5000"
