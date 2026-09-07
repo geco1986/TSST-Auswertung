@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Listen{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Listen &amp; Statistik</h1><p class="sub">Druckbare Start- und Anmeldelisten</p></div></div>
+<div class="tiles">
+  <a class="tile" href="{{ url_for('startliste_druck', nach='verein') }}" target="_blank">
+    <div class="ic">⬢</div><h3>Startliste nach Verein</h3><p>je Verein: Startnr, Disziplin, Gruppe</p></a>
+  <a class="tile" href="{{ url_for('startliste_druck', nach='kategorie') }}" target="_blank">
+    <div class="ic">▥</div><h3>Startliste nach Disziplin</h3><p>je Disziplin: Startnr, Verein, Gruppe</p></a>
+  <a class="tile" href="{{ url_for('startliste_druck', nach='startnr') }}" target="_blank">
+    <div class="ic">#</div><h3>Startliste nach Startnummer</h3><p>fortlaufend: Startnr, Verein, Disziplin</p></a>
+  <a class="tile" href="{{ url_for('statistik_druck') }}" target="_blank">
+    <div class="ic">∑</div><h3>Statistik Anmeldungen</h3><p>je Disziplin: Einsätze &amp; Teilnehmer</p></a>
+</div>
+{% endblock %}

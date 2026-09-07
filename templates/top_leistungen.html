@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Top-Leistungen{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Top-Leistungen</h1><p class="sub">Aktuell beste Leistung je Disziplin – für den Speaker</p></div></div>
+{% for b in bloecke %}
+  <h2 style="font-size:17px; margin:18px 0 8px;">{{ b.wk.name }}</h2>
+  <div class="table-wrap">
+    <table class="sortable">
+      <thead><tr><th>Disziplin</th><th>Führende Gruppe</th><th class="num">Bestwert</th></tr></thead>
+      <tbody>
+      {% for z in b.zeilen %}
+        <tr>
+          <td><strong>{{ z.kat.bezeichnung }}</strong></td>
+          <td>{% if z.beste %}{{ z.beste.anzeige }}{% else %}<span class="muted">–</span>{% endif %}</td>
+          <td class="num total">
+            {% if z.beste and z.beste.total is not none %}
+              {% if z.ist_zeit %}{{ fmt_zeit(z.beste.total) }}{% else %}{{ '%.2f'|format(z.beste.total) }}{% endif %}
+              {% if z.einheit and z.einheit!='s' %} {{ z.einheit }}{% endif %}
+            {% else %}<span class="muted">–</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endfor %}
+{% endblock %}

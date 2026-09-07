@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Vereine{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Vereine</h1><p class="sub">Vereine und Sektionen (tabVereinName)</p></div></div>
+
+<div class="grid-2" style="align-items:start; grid-template-columns: 1.4fr 1fr;">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Nr.</th><th>Verein</th><th>Zusatz</th><th>Ort</th><th></th></tr></thead>
+      <tbody>
+      {% for v in liste %}
+        <tr>
+          <td class="mono">{{ v.nummer or '' }}</td>
+          <td><strong>{{ v.name }}</strong></td>
+          <td>{{ v.zusatz or '' }}</td>
+          <td>{{ v.ort or '' }}</td>
+          <td class="right btn-row" style="justify-content:flex-end;">
+            <button class="btn sm" type="button"
+              onclick='fuellen({{ v.id }}, {{ v.nummer|tojson }}, {{ v.name|tojson }}, {{ v.zusatz|tojson }}, {{ v.ort|tojson }})'>Bearbeiten</button>
+            <form method="post" action="{{ url_for('verein_loeschen', vid=v.id) }}" onsubmit="return confirm('Verein löschen?')">
+              <button class="btn sm danger">Löschen</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="muted">Noch keine Vereine.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 id="formtitel" style="margin-top:0;">Neuer Verein</h3>
+    <form method="post" class="stack" style="max-width:none;" id="vform">
+      <input type="hidden" name="id" id="f_id">
+      <div class="grid-2">
+        <div><label>Nummer</label><input type="text" name="nummer" id="f_nummer"></div>
+        <div><label>Ort</label><input type="text" name="ort" id="f_ort"></div>
+      </div>
+      <div><label>Vereinsname</label><input type="text" name="name" id="f_name" required></div>
+      <div><label>Zusatz <span class="hint">(z. B. Jugi, Ki+Ju)</span></label><input type="text" name="zusatz" id="f_zusatz"></div>
+      <div class="btn-row">
+        <button class="btn primary" type="submit">Speichern</button>
+        <button class="btn ghost" type="button" onclick="neu()">Neu</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+function fuellen(id,nummer,name,zusatz,ort){
+  f_id.value=id; f_nummer.value=nummer||''; f_name.value=name||''; f_zusatz.value=zusatz||''; f_ort.value=ort||'';
+  document.getElementById('formtitel').textContent='Verein bearbeiten';
+  f_name.focus();
+}
+function neu(){ document.getElementById('vform').reset(); f_id.value='';
+  document.getElementById('formtitel').textContent='Neuer Verein'; }
+</script>
+{% endblock %}

@@ -1,0 +1,111 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8">
+<title>Notenblatt {{ kat.bezeichnung }}</title>
+<style>
+  :root{ --ink:#111; }
+  *{ box-sizing:border-box; }
+  body{ font-family:Arial,Helvetica,sans-serif; color:var(--ink); margin:0; }
+  .toolbar{ padding:12px 18px; }
+  .btn{ padding:8px 16px;border:1px solid #999;border-radius:8px;background:#14243b;color:#fff;cursor:pointer;font:inherit; }
+  .blatt{ width:26cm; max-width:100%; margin:0 auto 10px; padding:14px 18px 22px; }
+  .titel{ text-align:center; font-size:22px; font-weight:bold; margin:0 0 4px; }
+  .hr{ border:0; border-top:3px solid var(--ink); margin:4px 0 10px; }
+  .kopf{ width:100%; border-collapse:collapse; }
+  .kopf td{ padding:6px 4px; vertical-align:bottom; }
+  .lab{ font-weight:bold; font-size:13px; white-space:nowrap; padding-right:6px; }
+  .fill{ border-bottom:2px solid var(--ink); min-width:60px; }
+  .val{ font-size:20px; font-weight:bold; }
+  .tag{ border:2px solid var(--ink); text-align:center; font-weight:bold; font-size:18px; padding:8px 22px; }
+  .startnr{ font-size:24px; font-weight:bold; }
+  table.noten{ width:100%; border-collapse:collapse; margin-top:12px; }
+  table.noten th, table.noten td{ border:1px solid var(--ink); }
+  table.noten th{ font-size:12px; padding:5px 4px; background:#fff; }
+  table.noten td{ height:52px; }
+  .col-s{ width:52px; } .col-b{ width:52px; } .col-v{ width:78px; } .col-best{ width:150px; }
+  .grey{ background:#e6e6e6; }
+  .nurhoch{ font-size:10px; font-weight:normal; text-align:center; border-bottom:0 !important; }
+  .fuss{ width:100%; border-collapse:collapse; margin-top:14px; }
+  .fuss td{ padding:10px 4px; }
+  .sig{ border-bottom:1.5px solid var(--ink); min-width:220px; }
+  .box{ border:1.5px solid var(--ink); height:34px; min-width:160px; }
+  .rlab{ text-align:right; font-weight:bold; padding-right:8px; white-space:nowrap; }
+  @media print{ .toolbar{ display:none; } .blatt{ page-break-after:always; } }
+</style></head><body>
+<div class="toolbar"><button class="btn" onclick="window.print()">Drucken / als PDF speichern</button>
+  &nbsp;{{ gruppen|length }} Notenblätter ({{ kat.bezeichnung }})</div>
+
+{% for t in gruppen %}
+<div class="blatt">
+  <div class="titel">Turn-, Spiel- und Stafettentag</div>
+  <hr class="hr">
+  <table class="kopf">
+    <tr>
+      <td class="lab">Verein</td>
+      <td class="fill val" style="width:34%">{{ t.verein_name or '' }}{% if t.verein_zusatz %} {{ t.verein_zusatz }}{% endif %}</td>
+      <td style="width:14px"></td>
+      <td class="lab">Gruppe</td>
+      <td class="fill val" style="width:22%">{{ t.gruppennr or '' }}</td>
+      <td style="width:14px"></td>
+      <td class="tag">{{ sparte_tag }}</td>
+    </tr>
+    <tr>
+      <td class="lab">Disziplin</td>
+      <td class="fill val">{{ kat.bezeichnung }}</td>
+      <td></td>
+      <td class="lab">Anlage</td>
+      <td class="fill">&nbsp;</td>
+      <td></td>
+      <td><span class="lab">Start&nbsp;Nr.</span> <span class="startnr">{{ t.startnr }}</span></td>
+    </tr>
+  </table>
+  <hr class="hr">
+
+  <table class="noten">
+    <thead>
+      <tr>
+        <th class="col-s" rowspan="2">Serie</th>
+        <th class="col-b" rowspan="2">Bahn</th>
+        <th rowspan="2">Name / Vorname</th>
+        <th class="col-v" rowspan="2">1.Versuch</th>
+        <th class="col-v" rowspan="2">2.Versuch</th>
+        <th class="col-v" rowspan="2">3.Versuch</th>
+        <th class="col-v grey nurhoch" colspan="2">nur Hochsprung</th>
+        <th class="col-best" rowspan="2">Bestleistung</th>
+      </tr>
+      <tr>
+        <th class="col-v grey">4.Versuch</th>
+        <th class="col-v grey">5.Versuch</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for i in range(mitglieder) %}
+      <tr>
+        <td class="col-s"></td><td class="col-b"></td><td></td>
+        <td></td><td></td><td></td>
+        <td class="grey"></td><td class="grey"></td>
+        <td></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="fuss">
+    <tr>
+      <td class="lab" style="width:110px">Riegenleiter</td>
+      <td class="sig"></td>
+      <td style="width:30px"></td>
+      <td class="rlab">Total Gruppe</td>
+      <td class="box" style="width:170px"></td>
+    </tr>
+    <tr>
+      <td class="lab">Kampfrichter</td>
+      <td class="sig"></td>
+      <td></td>
+      <td class="rlab">Durchschnittsleistung</td>
+      <td class="box"></td>
+    </tr>
+  </table>
+</div>
+{% else %}
+<div class="blatt"><p>Keine Gruppen in dieser Disziplin.</p></div>
+{% endfor %}
+</body></html>

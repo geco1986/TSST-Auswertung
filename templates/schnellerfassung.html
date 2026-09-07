@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Schnellerfassung{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Erfassung per Startnummer</h1>
+    <p class="sub">Startnummer eingeben, Werte erfassen, weiter zur nächsten – im aktiven Wettkampf</p></div>
+  <div class="spacer"></div>
+  <a class="btn" href="{{ url_for('erfassung_index') }}">Nach Disziplin erfassen →</a>
+</div>
+
+<div class="card" style="margin-bottom:18px;">
+  <form method="get" class="btn-row" id="nrform" style="gap:12px;">
+    <label style="margin:0; font-size:16px;">Startnummer</label>
+    <input type="number" name="nr" id="nrbox" style="width:140px; font-size:20px; text-align:center;"
+           value="{{ nr if nr is not none and eintrag }}" placeholder="z. B. 12" autocomplete="off">
+    <button class="btn primary" type="submit">Laden</button>
+  </form>
+</div>
+
+{% if nicht_gefunden %}
+  <div class="flash error">Startnummer <strong>{{ nr }}</strong> gibt es im aktiven Wettkampf nicht.</div>
+{% endif %}
+
+{% if eintrag %}
+  {% set t = eintrag.t %}
+  <form method="post" id="saveform">
+    <input type="hidden" name="aktion" value="speichern">
+    <input type="hidden" name="tid" value="{{ t.id }}">
+    <div class="card">
+      <div style="display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:14px;">
+        <span class="rangnr" style="width:auto; padding:2px 12px; border-radius:8px;">Nr. {{ t.startnr }}</span>
+        <strong style="font-size:18px;">
+          {% if t.nachname or t.vorname %}{{ t.nachname }}{% if t.vorname %}, {{ t.vorname }}{% endif %}
+          {% else %}{{ t.verein_name or '—' }}{% if t.verein_zusatz %} {{ t.verein_zusatz }}{% endif %}{% if t.gruppennr %} <span class="pill">Gr. {{ t.gruppennr }}</span>{% endif %}{% endif %}
+        </strong>
+        <span class="pill">{{ eintrag.kat.bezeichnung }}</span>
+        {% if eintrag.wk_name %}<span class="muted">{{ eintrag.wk_name.split('–')[-1].strip() }}</span>{% endif %}
+        <span class="muted">
+          {% if eintrag.ist_stafette %}Stafette · Zeit (s) · tiefer = besser
+          {% elif eintrag.berechnung == 'durchschnitt' %}Durchschnitt aus {{ eintrag.anzahl_werte }}{% if eintrag.einheit %} · {{ eintrag.einheit }}{% endif %}
+          {% elif eintrag.anzahl_werte == 1 %}Teamzeit{% if eintrag.einheit %} · {{ eintrag.einheit }}{% endif %}
+          {% else %}Summe{% endif %}
+          {% if not eintrag.ist_stafette %}· {{ 'tiefer = besser' if eintrag.richtung == 'tief' else 'höher = besser' }}{% endif %}
+        </span>
+      </div>
+
+      {% if eintrag.ist_stafette %}
+        {% macro staffel_block(prefix, titel, row) %}
+          <div class="card" style="box-shadow:none; background:#fafbfc;">
+            <strong>{{ titel }}</strong>
+            <div class="grid-2" style="margin-top:8px;">
+              <div><label>Zeit <span class="hint">(s oder m:ss.ss)</span></label>
+                <input type="text" inputmode="decimal" name="{{ prefix }}_zeit"
+                       value="{{ fmt_zeit(row['rohzeit']) if row and row['rohzeit'] is not none else '' }}"></div>
+              <div class="grid-2">
+                <div><label>{{ eintrag.zuschlag_a_label }}</label>
+                  <input type="number" min="0" name="{{ prefix }}_fa" value="{{ row['fehler_a'] if row else 0 }}"></div>
+                <div><label>{{ eintrag.zuschlag_b_label }}</label>
+                  <input type="number" min="0" name="{{ prefix }}_fb" value="{{ row['fehler_b'] if row else 0 }}"></div>
+              </div>
+            </div>
+          </div>
+        {% endmacro %}
+        <div style="display:grid; gap:12px;">
+          {% if eintrag.hat_final %}{{ staffel_block('vorlauf', 'Vorlauf', eintrag.vorlauf) }}{% endif %}
+          {{ staffel_block('final', 'Final / Endlauf' if not eintrag.hat_final else 'Final', eintrag.final) }}
+        </div>
+      {% else %}
+      <div class="checks" style="grid-template-columns: repeat(auto-fill,minmax(150px,1fr));">
+        {% for p in eintrag.positionen %}
+          <div>
+            <label style="font-weight:600;">
+              {% if eintrag.anzahl_werte == 1 %}{{ eintrag.disz_bez }}{% if eintrag.einheit %} ({{ eintrag.einheit }}){% endif %}
+              {% else %}Wert {{ loop.index }}{% if eintrag.einheit %} ({{ eintrag.einheit }}){% endif %}{% endif %}
+            </label>
+            <input type="text" inputmode="decimal" class="val-in" data-idx="{{ loop.index0 }}"
+                   name="note_{{ t.id }}_{{ p }}"
+                   value="{{ eintrag.werte[p] if p in eintrag.werte else '' }}">
+          </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="savebar" style="margin-top:14px;">
+        <button class="btn primary" type="submit">Speichern &amp; nächste Startnummer</button>
+        <span class="note">
+          {% if not eintrag.ist_stafette %}Ergebnis: <strong id="live">–</strong>
+          {% if eintrag.einheit %}{{ eintrag.einheit }}{% endif %} · <span class="muted">DNS/DNF möglich</span>
+          <span id="warnhinweis" style="display:none;color:#d81f2a;font-weight:600;"> · ⚠ Wert unplausibel (prüfen!)</span>&nbsp;·&nbsp;{% endif %}
+          mit <strong>Enter</strong> weiter.</span>
+      </div>
+
+      <hr class="soft">
+      <div class="grid-2">
+        <div><label>Vermerk <span class="hint">(nicht gewertet)</span></label>
+          <select name="status">
+            <option value="">— gewertet —</option>
+            {% for key, label in status_labels.items() %}
+              <option value="{{ key }}" {{ 'selected' if eintrag.t.status==key }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div><label>Bemerkung <span class="hint">(frei)</span></label>
+          <input type="text" name="bemerkung" value="{{ eintrag.t.bemerkung or '' }}"></div>
+      </div>
+    </div>
+  </form>
+
+  <script>
+    {% if not eintrag.ist_stafette %}
+    const BERECHNUNG = "{{ eintrag.berechnung }}";
+    const STREICH = {{ eintrag.kat.streich }};
+    const WMIN = {{ eintrag.kat.warn_min if eintrag.kat.warn_min is not none else 'null' }};
+    const WMAX = {{ eintrag.kat.warn_max if eintrag.kat.warn_max is not none else 'null' }};
+    const inputs = [...document.querySelectorAll('.val-in')];
+    function pruefePlausibel(){
+      let warn=false;
+      inputs.forEach(inp=>{
+        const v=parseFloat((inp.value||'').replace(',','.'));
+        const bad = !isNaN(v) && ((WMIN!==null && v<WMIN) || (WMAX!==null && v>WMAX));
+        inp.style.outline = bad ? '2px solid #d81f2a' : '';
+        if(bad) warn=true;
+      });
+      const w=document.getElementById('warnhinweis');
+      if(w) w.style.display = warn ? 'inline' : 'none';
+    }
+    function rechne(){
+      const w = inputs.map(i=>parseFloat((i.value||'').replace(',','.'))).filter(v=>!isNaN(v));
+      const live = document.getElementById('live');
+      if(!w.length){ live.textContent='–'; return; }
+      let out;
+      if(BERECHNUNG === 'durchschnitt'){ out = w.reduce((a,b)=>a+b,0)/w.length; }
+      else { let t=w.reduce((a,b)=>a+b,0);
+        if(STREICH>0 && w.length>STREICH){ const s=[...w].sort((a,b)=>a-b); t-=s.slice(0,STREICH).reduce((a,b)=>a+b,0);} out=t; }
+      live.textContent = out.toFixed(2);
+    }
+    inputs.forEach((inp,idx)=>{
+      inp.addEventListener('input', ()=>{ rechne(); pruefePlausibel(); });
+      inp.addEventListener('keydown', e=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          if(idx+1 < inputs.length){ inputs[idx+1].focus(); inputs[idx+1].select(); }
+          else { document.getElementById('saveform').submit(); }
+        }
+      });
+    });
+    rechne();
+    pruefePlausibel();
+    if(inputs.length){ inputs[0].focus(); inputs[0].select(); }
+    {% else %}
+    const f = document.querySelector('input[name="vorlauf_zeit"], input[name="final_zeit"]');
+    if(f){ f.focus(); f.select(); }
+    {% endif %}
+  </script>
+{% else %}
+  <script>
+    // keine Startnummer geladen -> Fokus ins Suchfeld für den nächsten Eintrag
+    const b = document.getElementById('nrbox'); if(b){ b.focus(); }
+  </script>
+{% endif %}
+{% endblock %}

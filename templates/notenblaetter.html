@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Notenblätter{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Notenblätter / Startlisten</h1><p class="sub">Druckbare Listen je Disziplin für die Kampfrichter</p></div></div>
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Wettkampf</th><th>Disziplin</th><th></th></tr></thead>
+    <tbody>
+    {% for k in kategorien %}
+      <tr>
+        <td class="muted">{{ k.wk_name.split('–')[-1].strip() }}</td>
+        <td><strong>{{ k.bezeichnung }}</strong>{% if k.ist_stafette %} <span class="pill">Lauf</span>{% endif %}</td>
+        <td class="right">
+          {% if k.ist_stafette %}
+            {% if k.hat_final %}
+              <a class="btn sm" href="{{ url_for('notenblatt_druck', kid=k.id, runde='vorlauf') }}" target="_blank">Vorläufe</a>
+              <a class="btn sm" href="{{ url_for('notenblatt_druck', kid=k.id, runde='final') }}" target="_blank">Finals</a>
+            {% else %}
+              <a class="btn sm" href="{{ url_for('notenblatt_druck', kid=k.id) }}" target="_blank">Endläufe</a>
+            {% endif %}
+          {% else %}
+            <a class="btn sm" href="{{ url_for('notenblatt_druck', kid=k.id) }}" target="_blank">Notenblätter drucken</a>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

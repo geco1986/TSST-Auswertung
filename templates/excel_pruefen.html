@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Excel-Import prüfen{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Zuordnung prüfen</h1>
+  <p class="sub">Automatisch erkannt – bitte kontrollieren und bei Bedarf anpassen</p></div></div>
+
+<form method="post" action="{{ url_for('excel_uebernehmen') }}">
+  <input type="hidden" name="pfad" value="{{ pfad }}">
+  {% for sh in sheets %}
+    <div class="card" style="margin-bottom:16px;">
+      <h3 style="margin-top:0;">{{ sh.sparte }} <span class="muted" style="font-weight:400;">· {{ sh.zeilen|length }} Vereine · {{ summen[sh.sparte] }} Gruppen</span></h3>
+      <div class="table-wrap" style="border:none;">
+        <table>
+          <thead><tr><th>Excel-Spalte</th><th>→ Disziplin</th></tr></thead>
+          <tbody>
+          {% for abbr in sh.disziplinen %}
+            {% set key = sh.sparte ~ '|' ~ abbr %}
+            <tr>
+              <td><strong>{{ abbr }}</strong></td>
+              <td>
+                <select name="map|{{ key }}" style="width:280px">
+                  <option value="">— ignorieren —</option>
+                  {% for k in kats[sh.sparte] %}
+                    <option value="{{ k.id }}" {{ 'selected' if vorschlag[key]==k.id }}>{{ k.bezeichnung }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endfor %}
+
+  <div class="card" style="margin-bottom:16px;">
+    <label class="checks" style="display:inline-flex;align-items:center;gap:8px;">
+      <input type="checkbox" name="reset" value="1" checked>
+      Bestehende Anmeldungen vorher löschen (empfohlen bei Neu-Import)
+    </label>
+    <p class="muted" style="font-size:13px;margin:8px 0 0;">Startnummern werden je Sparte fortlaufend vergeben
+      (Turner ab 1, Turnerinnen ab 501), pro Verein in Disziplin-Reihenfolge.</p>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn primary" type="submit" onclick="return confirm('Anmeldungen jetzt importieren?')">Importieren</button>
+    <a class="btn ghost" href="{{ url_for('excel_import') }}">Abbrechen</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Excel-Import{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Anmeldungen aus Excel importieren</h1>
+  <p class="sub">Blätter <strong>TU</strong> (Turner) und <strong>TI</strong> (Turnerinnen) mit Vereinen × Disziplin-Anzahl</p></div></div>
+<div class="card" style="max-width:640px;">
+  <form method="post" enctype="multipart/form-data" class="stack">
+    <div>
+      <label>Excel-Datei (.xlsx)</label>
+      <input type="file" name="datei" accept=".xlsx" required>
+    </div>
+    <p class="muted" style="font-size:13px;margin:0;">
+      Im nächsten Schritt werden die Spalten automatisch den Disziplinen zugeordnet.
+      Du kannst die Zuordnung prüfen und anpassen, bevor importiert wird.</p>
+    <button class="btn primary" type="submit">Weiter zur Prüfung</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Einsatzplan{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Zeitplan / Einsatzplan (Vormittag)</h1>
+  <p class="sub">Gruppen auf Anlagen und Startzeiten verteilen</p></div></div>
+
+<div class="card" style="margin-bottom:16px;">
+  <form method="post" action="{{ url_for('einsatzplan_generieren') }}" class="btn-row" style="align-items:end;gap:14px;">
+    <div><label>Startzeit</label><input type="time" name="startzeit" value="{{ startzeit }}" style="width:120px"></div>
+    <button class="btn primary" type="submit">Einsatzplan generieren</button>
+    <a class="btn" href="{{ url_for('einsatzplan_druck', nach='anlage') }}" target="_blank">Druck nach Anlage</a>
+    <a class="btn" href="{{ url_for('einsatzplan_druck', nach='verein') }}" target="_blank">Druck nach Verein</a>
+  </form>
+  <p class="muted" style="font-size:13px;margin:8px 0 0;">
+    Dauer je Gruppe = <em>Zeit/Turner × Gruppengrösse</em>; Anlagen &amp; Zeit/Turner unter
+    <a href="{{ url_for('einstellungen') }}">Einstellungen</a>. Heuristik ohne Konflikt-Prüfung über Vereine – bei Bedarf manuell anpassen.</p>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Disziplin</th><th class="num">Gruppen</th><th class="num">Anlagen</th><th class="num">Zeit/Turner (Min.)</th></tr></thead>
+    <tbody>
+    {% for k in kats %}
+      <tr><td><strong>{{ k.bezeichnung }}</strong> <span class="muted">{{ k.wk_name.split('–')[-1].strip() }}</span></td>
+        <td class="num mono">{{ k.anz }}</td>
+        <td class="num mono">{{ k.anlagen or 1 }}</td>
+        <td class="num mono">{{ '%g'|format(k.zeit_pro_turner or 0) }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,63 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8">
+<title>Startliste</title>
+<style>
+  body{ font-family:Arial,Helvetica,sans-serif; color:#111; margin:0; font-size:13px; }
+  .toolbar{ padding:12px 18px; } .btn{ padding:8px 16px;border:1px solid #999;border-radius:8px;background:#14243b;color:#fff;cursor:pointer;font:inherit; }
+  .wrap{ padding:0 12mm 12mm; }
+  .titel{ text-align:center; font-weight:bold; font-size:15px; border-bottom:2px solid #111; padding-bottom:6px; margin:0 0 10px; }
+  .titel .u{ font-weight:normal; font-size:12px; }
+  h3{ font-size:16px; margin:2px 0 4px; }
+  .verband{ color:#666; font-weight:normal; font-size:12px; }
+  .cnt{ color:#555; font-weight:normal; font-size:12px; }
+  table{ border-collapse:collapse; width:100%; margin-bottom:6px; } th,td{ border:1px solid #bbb; padding:5px 8px; text-align:left; }
+  th{ background:#f0f0f0; } td.n{ text-align:right; width:80px; font-variant-numeric:tabular-nums; }
+  td.v{ font-size:15px; font-weight:600; }
+  .grp{ break-inside:avoid; margin-bottom:12px; }
+  @page { size: A4; margin: 12mm; }
+  @media print{ .toolbar{ display:none; }
+    /* jede Kategorie bzw. jeder Verein auf eigener Seite */
+    .seite{ page-break-after:always; break-after:page; }
+    .seite:last-child{ page-break-after:auto; break-after:auto; }
+    /* langer Startnummern-Lauf: Titelzeile wiederholt sich als thead */
+    thead{ display:table-header-group; }
+  }
+</style></head><body>
+<div class="toolbar"><button class="btn" onclick="window.print()">Drucken / als PDF speichern</button></div>
+{% for b in bloecke %}
+  {% set unter = 'Startliste ' ~ b.wk.name.split('–')[-1].strip() ~ ' · ' ~ ({'verein':'nach Verein','kategorie':'nach Disziplin'}.get(nach,'nach Startnummer')) ~ ' — ' ~ b.gesamt ~ ' gemeldete Gruppen' %}
+  {% if nach=='startnr' %}
+    <div class="wrap">
+      <table>
+        <thead>
+          <tr><th colspan="4" style="border:none;background:#fff;padding:0 0 8px;"><div class="titel">{{ anlass_titel }}<br><span class="u">{{ unter }}</span></div></th></tr>
+          <tr><th class="n">StartNr</th><th>Verein</th><th class="n">Gruppe</th><th>Disziplin</th></tr>
+        </thead>
+        <tbody>
+        {% for r in b.gruppen[0].zeilen %}
+          <tr><td class="n">{{ r.startnr }}</td><td class="v">{{ r.verein_voll }}</td><td class="n">{{ r.gruppennr or '' }}</td><td>{{ r.kat_name }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    {% for g in b.gruppen %}
+      <div class="seite"><div class="wrap">
+        <div class="titel">{{ anlass_titel }}<br><span class="u">{{ unter }}</span></div>
+        <h3>{{ g.kopf }} {% if g.verband %}<span class="verband">{{ g.verband }}</span>{% endif %} <span class="cnt">· Anz. Gruppen: {{ g.anzahl }}</span></h3>
+        <table>
+          <thead><tr><th class="n">StartNr</th>
+            {% if nach=='verein' %}<th>Disziplin</th><th class="n">Gruppe</th>
+            {% else %}<th>Verein</th><th class="n">Gruppe</th>{% endif %}</tr></thead>
+          <tbody>
+          {% for r in g.zeilen %}
+            <tr><td class="n">{{ r.startnr }}</td>
+              {% if nach=='verein' %}<td>{{ r.kat_name }}</td><td class="n">{{ r.gruppennr or '' }}</td>
+              {% else %}<td class="v">{{ r.verein_voll }}</td><td class="n">{{ r.gruppennr or '' }}</td>{% endif %}</tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div></div>
+    {% endfor %}
+  {% endif %}
+{% endfor %}
+</body></html>

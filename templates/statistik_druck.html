@@ -1,0 +1,38 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8">
+<title>Statistik Anmeldungen</title>
+<style>
+  body{ font-family:Arial,Helvetica,sans-serif; color:#111; margin:0; }
+  .toolbar{ padding:12px 18px; } .btn{ padding:8px 16px;border:1px solid #999;border-radius:8px;background:#14243b;color:#fff;cursor:pointer;font:inherit; }
+  .wrap{ padding:0 14mm 12mm; }
+  .titel{ text-align:center; font-weight:bold; font-size:15px; border-bottom:2px solid #111; padding-bottom:6px; margin:0 0 12px; }
+  .titel .u{ font-weight:normal; font-size:13px; }
+  h2{ font-size:15px; margin:16px 0 6px; }
+  table{ border-collapse:collapse; width:100%; } th,td{ border:1px solid #999; padding:6px 10px; }
+  th{ background:#f0f0f0; text-align:left; } td.n{ text-align:right; font-variant-numeric:tabular-nums; }
+  tr.total td{ font-weight:bold; border-top:2px solid #111; }
+  .grp{ background:#f7f7f7; }
+  @page { size: A4; margin: 14mm; }
+  @media print{ .toolbar{ display:none; } }
+</style></head><body>
+<div class="toolbar"><button class="btn" onclick="window.print()">Drucken / als PDF speichern</button></div>
+<div class="wrap">
+<div class="titel">{{ anlass_titel }}<br><span class="u">Statistik Anmeldungen</span></div>
+{% for b in bloecke %}
+  <h2>{{ b.wk.name.split('–')[-1].strip() }}</h2>
+  <table>
+    <thead><tr>
+      <th>Disziplin</th><th class="n">Teilnehmer</th><th class="n">Einsätze</th>
+      <th class="n grp">Ausz. 30%</th><th class="n grp">Ausz. 33%</th><th class="n grp">Ausz. 40%</th>
+    </tr></thead>
+    <tbody>
+      {% for z in b.zeilen %}
+        <tr><td>{{ z.kat }}</td><td class="n">{{ z.teilnehmer }}</td><td class="n">{{ z.einsaetze }}</td>
+          <td class="n grp">{{ z.a30 }}</td><td class="n grp">{{ z.a33 }}</td><td class="n grp">{{ z.a40 }}</td></tr>
+      {% endfor %}
+      <tr class="total"><td>Total {{ b.wk.name.split('–')[-1].strip() }}</td><td class="n">{{ b.tot_teiln }}</td><td class="n">{{ b.tot_gruppen }}</td>
+        <td class="n"></td><td class="n"></td><td class="n"></td></tr>
+    </tbody>
+  </table>
+{% endfor %}
+</div>
+</body></html>

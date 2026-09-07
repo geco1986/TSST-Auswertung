@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Disziplinen{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Disziplinen</h1><p class="sub">Geräte und Disziplinen (tabDisziplinen) – globaler Katalog</p></div></div>
+
+<div class="grid-2" style="align-items:start; grid-template-columns: 1.4fr 1fr;">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Abk.</th><th>Bezeichnung</th><th>Gruppe</th><th>Einheit</th><th></th></tr></thead>
+      <tbody>
+      {% for d in liste %}
+        <tr>
+          <td class="mono"><strong>{{ d.abk }}</strong></td>
+          <td>{{ d.bezeichnung }}</td>
+          <td>{{ d.diszgruppe or '' }}</td>
+          <td><span class="pill">{{ d.einheit }}</span></td>
+          <td class="right btn-row" style="justify-content:flex-end;">
+            <button class="btn sm" type="button"
+              onclick='fuellen({{ d.id }}, {{ d.abk|tojson }}, {{ d.bezeichnung|tojson }}, {{ d.diszgruppe|tojson }}, {{ d.einheit|tojson }})'>Bearbeiten</button>
+            <form method="post" action="{{ url_for('disziplin_loeschen', did=d.id) }}" onsubmit="return confirm('Disziplin löschen?')">
+              <button class="btn sm danger">Löschen</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="muted">Noch keine Disziplinen.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 id="formtitel" style="margin-top:0;">Neue Disziplin</h3>
+    <form method="post" class="stack" style="max-width:none;" id="dform">
+      <input type="hidden" name="id" id="f_id">
+      <div class="grid-2">
+        <div><label>Abkürzung</label><input type="text" name="abk" id="f_abk" placeholder="BO"></div>
+        <div><label>Einheit</label>
+          <select name="einheit" id="f_einheit">
+            {% for e in einheiten %}<option value="{{ e }}">{{ e }}</option>{% endfor %}
+          </select></div>
+      </div>
+      <div><label>Bezeichnung</label><input type="text" name="bezeichnung" id="f_bez" placeholder="Boden" required></div>
+      <div><label>Gruppe <span class="hint">(z. B. Gerät, Leichtathletik)</span></label><input type="text" name="diszgruppe" id="f_grp"></div>
+      <div class="btn-row">
+        <button class="btn primary" type="submit">Speichern</button>
+        <button class="btn ghost" type="button" onclick="neu()">Neu</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+function fuellen(id,abk,bez,grp,einh){
+  f_id.value=id; f_abk.value=abk||''; f_bez.value=bez||''; f_grp.value=grp||''; f_einheit.value=einh||'Note';
+  document.getElementById('formtitel').textContent='Disziplin bearbeiten'; f_bez.focus();
+}
+function neu(){ document.getElementById('dform').reset(); f_id.value='';
+  document.getElementById('formtitel').textContent='Neue Disziplin'; }
+</script>
+{% endblock %}

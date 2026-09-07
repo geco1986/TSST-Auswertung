@@ -1,0 +1,48 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8">
+<title>Serienplan {{ kat.bezeichnung }} {{ 'Vorläufe' if runde=='vorlauf' else 'Finals' }}</title>
+<style>
+  *{ box-sizing:border-box; }
+  body{ font-family:Arial,Helvetica,sans-serif; color:#111; margin:0; }
+  .toolbar{ padding:12px 18px; }
+  .btn{ padding:8px 16px;border:1px solid #999;border-radius:8px;background:#14243b;color:#fff;cursor:pointer;font:inherit; }
+  .kopf-fix{ text-align:center; font-weight:bold; font-size:15px; border-bottom:2px solid #111; padding-bottom:6px; margin:0 14mm 8px; }
+  .blatt{ margin:0 auto; padding:0 14mm; }
+  .serie{ break-inside:avoid; page-break-after:always; break-after:page; }
+  .serie:last-child{ page-break-after:auto; break-after:auto; }
+  .serie h2{ font-size:20px; margin:6px 0 10px; }
+  table{ width:100%; border-collapse:collapse; table-layout:fixed; }
+  th,td{ border:1px solid #111; padding:12px 12px; font-size:16px; }
+  th{ background:#efefef; text-align:left; }
+  td.b{ width:56px; text-align:center; font-weight:bold; font-size:19px; }
+  td.nr{ width:96px; text-align:center; }
+  th.v, td.v{ width:auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:17px; font-weight:600; }
+  th.zeit, td.zeit{ width:150px; }
+  th.disq, td.disq{ width:150px; font-size:12px; }
+  .titel{ font-size:15px; font-weight:bold; margin:12px 0 0; }
+  .seitentitel{ text-align:center; font-weight:bold; font-size:15px; border-bottom:2px solid #111; padding-bottom:6px; margin-bottom:10px; }
+  .seitentitel .u{ font-weight:normal; font-size:13px; }
+  @page { size: A4 landscape; margin: 12mm; }
+  @media print{ .toolbar{ display:none; } }
+</style></head><body>
+<div class="toolbar"><button class="btn" onclick="window.print()">Drucken / als PDF speichern</button></div>
+{% set sparte = 'Turner' if kat.geschlecht=='m' else 'Turnerinnen' %}
+{% set untertitel = 'Serienplan ' ~ kat.bezeichnung ~ ' ' ~ sparte ~ ' ' ~ ('Vorläufe' if runde=='vorlauf' else ('Finals' if kat.hat_final else 'Endläufe')) %}
+<div class="blatt">
+{% for serie, reihen in serien.items() %}
+  <div class="serie">
+    <div class="seitentitel">{{ anlass_titel }}<br><span class="u">{{ untertitel }}</span></div>
+    <h2>{{ serie }}. Serie</h2>
+    <table>
+      <thead><tr><th class="b">Bahn</th><th class="nr">Start-Nr.</th><th class="v">Verein</th><th class="zeit">Zeit</th><th class="disq">Disq. (Grund)</th></tr></thead>
+      <tbody>
+        {% for r in reihen %}
+          <tr><td class="b">{{ r.bahn }}</td><td class="nr">{{ r.startnr }}</td><td class="v">{{ r.verein }}</td><td class="zeit"></td><td class="disq"></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <p>Noch keine Bahnen zugeteilt. Erst unter „Bahnen/Serien" zuteilen.</p>
+{% endfor %}
+</div>
+</body></html>

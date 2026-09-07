@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Vorjahres-Rangliste{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Vorjahres-Rangliste (Stafetten)</h1>
+  <p class="sub">Grundlage für die automatische Bahnen-/Serieneinteilung</p></div></div>
+{% if not bloecke %}
+  <div class="card empty"><p>Noch keine Vorjahresdaten. Import unter <a href="{{ url_for('einstellungen') }}">Einstellungen</a>.</p></div>
+{% endif %}
+{% for key, zeilen in bloecke.items() %}
+  <div class="card" style="margin-bottom:14px;">
+    <h3 style="margin:0 0 8px;font-size:15px;">{{ key[1] }} <span class="muted" style="font-weight:400;">{{ key[0] or '' }}</span></h3>
+    <div class="table-wrap" style="border:none;">
+      <table class="sortable">
+        <thead><tr><th class="num">Rang</th><th>Verein</th><th class="num">Gr.</th><th class="num">Zeit</th></tr></thead>
+        <tbody>
+        {% for r in zeilen %}
+          <tr><td class="num">{{ r.rang }}</td><td>{{ r.verein }}</td><td class="num">{{ r.gruppennr or '' }}</td>
+            <td class="num total">{{ fmt_zeit(r.zeit) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endfor %}
+{% endblock %}

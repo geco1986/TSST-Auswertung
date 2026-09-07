@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Einstellungen{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Einstellungen</h1><p class="sub">Konfiguration (tabPCSettings) sowie Datensicherung</p></div></div>
+
+<div class="grid-2" style="align-items:start;">
+  <form method="post" class="card stack" style="max-width:none;">
+    <h3 style="margin-top:0;">Arbeitsplatz</h3>
+    <div class="grid-2">
+      <div><label>PC-ID</label><input type="text" name="pc_id" value="{{ settings.pc_id }}" placeholder="1"></div>
+      <div><label>Client-Typ</label>
+        <select name="client_typ">
+          {% for v in ['Einzelplatz','Netzwerk-Server','Netzwerk-Client'] %}
+            <option value="{{ v }}" {{ 'selected' if settings.client_typ==v }}>{{ v }}</option>
+          {% endfor %}
+        </select></div>
+    </div>
+    <div><label>Eigener Verein</label><input type="text" name="verein_eigen" value="{{ settings.verein_eigen }}"></div>
+    <div><label>Backup-Pfad <span class="hint">(Original: USB/Diskette)</span></label>
+      <input type="text" name="backup_pfad" value="{{ settings.backup_pfad }}" placeholder="c:\debra\backup"></div>
+    <button class="btn primary" type="submit">Speichern</button>
+  </form>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Datensicherung</h3>
+    <p class="muted">Im Original werden Daten per Export/Import über USB zusammengeführt. Hier lädst du die komplette Datenbank als Datei herunter.</p>
+    <p><a class="btn" href="{{ url_for('backup') }}">Backup herunterladen</a></p>
+    <p class="muted" style="font-size:13px;">Datenbank-Datei: <span class="mono">{{ db_pfad }}</span></p>
+    <hr class="soft">
+    <h3>Wettkampfbestimmungen (WTU)</h3>
+    <p class="muted">Setzt für die Wettkämpfe der <strong>Turner und Turnerinnen</strong> die
+      WKB-Wertung: Durchschnitt aller 5 bzw. 4 Leistungen, Läufe/Stafetten nach Zeit,
+      30 % Auszeichnungen pro Disziplin. Jugend-Wettkämpfe bleiben unverändert.</p>
+    <form method="post" action="{{ url_for('wkb_anwenden') }}">
+      <button class="btn" type="submit">WKB anwenden</button>
+    </form>
+    <hr class="soft">
+    <h3>DEBRA-Backup importieren</h3>
+    <p class="muted">Liest einen Backup-Ordner mit den Text-Exporten
+      (<span class="mono">WT_*.txt</span>, <span class="mono">WR_*.txt</span>,
+      <span class="mono">WI_*.txt</span>, <span class="mono">WT_VERE.txt</span>) ein.
+      <strong>Ersetzt alle bestehenden Daten.</strong></p>
+    <form method="post" action="{{ url_for('backup_import') }}" class="stack" style="max-width:none;"
+          onsubmit="return confirm('Alle Daten ersetzen und Backup importieren?')">
+      <input type="text" name="import_pfad" placeholder="/pfad/zum/Backup" required>
+      <button class="btn" type="submit">Backup importieren</button>
+    </form>
+    <hr class="soft">
+    <h3>Demo</h3>
+    <p class="muted">Setzt alle Daten zurück und lädt den Beispiel-Wettkampf.</p>
+    <form method="post" action="{{ url_for('demo_laden') }}" onsubmit="return confirm('Alle Daten löschen und Demo neu laden?')">
+      <button class="btn danger" type="submit">Demo-Daten neu laden</button>
+    </form>
+  </div>
+</div>
+
+<div class="card" style="margin-top:18px;">
+  <h3 style="margin-top:0;">Über diesen Nachbau</h3>
+  <p class="muted" style="margin:0;">
+    Auswertung TSST bildet die Access-Software DEBRA als Web-Applikation nach: Teilnehmer- und
+    Resultaterfassung, Ranglisten (Einzel &amp; Sektion), Auszeichnungen, Vereinsblatt und Zeitplan.
+    Die Wertungsregeln (Streichresultate, Kranz-Modus) sind je Kategorie einstellbar, damit sie
+    exakt auf euren Wettkampf passen.
+  </p>
+</div>
+{% endblock %}

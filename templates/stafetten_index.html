@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Stafetten{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Stafetten – Selektion &amp; Bahnen</h1><p class="sub">Zeiten erfassen, Finalteilnehmer selektieren, Bahnen zuteilen</p></div></div>
+<div class="tiles">
+  {% for k in kategorien %}
+    <a class="tile" href="{{ url_for('stafette_verwalten', kid=k.id) }}">
+      <div class="ic">⇄</div>
+      <h3>{{ k.bezeichnung }}</h3>
+      <p>{{ k.wk_name.split('–')[-1].strip() }}{% if k.hat_final %} · {{ 'A/B-Final' if k.final_typ=='ab' else 'Final (8)' }}{% else %} · Endlauf{% endif %}</p>
+    </a>
+  {% endfor %}
+</div>
+{% endblock %}

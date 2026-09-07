@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Wettkämpfe{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Wettkämpfe</h1><p class="sub">Anlässe verwalten und aktiven Wettkampf wählen</p></div></div>
+
+<div class="grid-2" style="align-items:start; grid-template-columns: 1.4fr 1fr;">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Ort</th><th>Datum</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for w in liste %}
+        <tr>
+          <td><strong>{{ w.name }}</strong></td>
+          <td>{{ w.ort or '—' }}</td>
+          <td class="mono">{{ w.datum or '—' }}</td>
+          <td>{% if w.aktiv %}<span class="kranz">● aktiv</span>{% else %}<span class="pill">inaktiv</span>{% endif %}</td>
+          <td class="right btn-row" style="justify-content:flex-end;">
+            {% if not w.aktiv %}<a class="btn sm" href="{{ url_for('wettkampf_aktiv', wid=w.id) }}">Aktivieren</a>{% endif %}
+            <form method="post" action="{{ url_for('wettkampf_loeschen', wid=w.id) }}" onsubmit="return confirm('Wettkampf inkl. aller Daten löschen?')">
+              <button class="btn sm danger" type="submit">Löschen</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="muted">Noch keine Wettkämpfe.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Neuer Wettkampf</h3>
+    <form method="post" class="stack" style="max-width:none;">
+      <div><label>Name</label><input type="text" name="name" placeholder="z. B. Turnfest 2026" required></div>
+      <div class="grid-2">
+        <div><label>Ort</label><input type="text" name="ort"></div>
+        <div><label>Datum</label><input type="date" name="datum"></div>
+      </div>
+      <button class="btn primary" type="submit">Anlegen</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

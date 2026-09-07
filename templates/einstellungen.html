@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Einstellungen{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Einstellungen</h1><p class="sub">Wettkampf-Konfiguration an einem Ort</p></div></div>
+
+<form method="post">
+  <div class="card" style="margin-bottom:16px;">
+    <h3 style="margin-top:0;">Anlass</h3>
+    {% for w in wettkaempfe %}
+      <div class="grid-2" style="margin-bottom:10px;">
+        <div><label>Name{% if wettkaempfe|length>1 %} ({{ w.name.split('–')[-1].strip() }}){% endif %}</label>
+          <input type="text" name="wk_name_{{ w.id }}" value="{{ w.name }}"></div>
+        <div class="grid-2">
+          <div><label>Ort</label><input type="text" name="wk_ort_{{ w.id }}" value="{{ w.ort or '' }}"></div>
+          <div><label>Datum</label><input type="text" name="wk_datum_{{ w.id }}" value="{{ w.datum or '' }}"></div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <h3 style="margin-top:0;">Auszeichnungen</h3>
+    <div class="grid-2">
+      <div><label>Anteil in %</label><input type="number" step="1" name="kranz_prozent" value="30"></div>
+      <div style="align-self:end;"><label class="checks" style="display:inline-flex;"><input type="checkbox" name="kranz_auf_alle" value="1"> auf alle Kategorien anwenden</label></div>
+    </div>
+    <p class="muted" style="font-size:13px;margin:6px 0 0;">Feineinstellung je Disziplin unten oder unter <a href="{{ url_for('kategorien') }}">Kategorien</a>.</p>
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <h3 style="margin-top:0;">Auszeichnung pro Disziplin</h3>
+    <p class="muted" style="font-size:13px;margin:0 0 8px;">Modus <em>Beste X %</em> oder <em>Bis Rang X</em> je Disziplin. Der Wert bedeutet je nach Modus Prozent bzw. Rang.</p>
+    <div class="table-wrap" style="border:none;">
+      <table>
+        <thead><tr><th>Disziplin</th><th>Modus</th><th>Wert</th></tr></thead>
+        <tbody>
+        {% for k in kategorien %}
+          <tr>
+            <td><strong>{{ k.bezeichnung }}</strong> <span class="muted">{{ k.wk_name.split('–')[-1].strip() }}</span></td>
+            <td><select name="km_{{ k.id }}" style="width:150px">
+              {% for key,label in modi.items() %}<option value="{{ key }}" {{ 'selected' if k.kranz_modus==key }}>{{ label }}</option>{% endfor %}
+            </select></td>
+            <td><input type="number" step="0.01" name="kw_{{ k.id }}" value="{{ '%g'|format(k.kranz_wert or 0) }}" style="width:90px"></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if stafetten %}
+  <div class="card" style="margin-bottom:16px;">
+    <h3 style="margin-top:0;">Stafetten – Zeitzuschläge je Übergabefehler</h3>
+    <div class="table-wrap" style="border:none;">
+      <table>
+        <thead><tr><th>Stafette</th><th>{{ stafetten[0].zuschlag_a_label or 'Fehler A' }} (s)</th><th>{{ stafetten[0].zuschlag_b_label or 'Fehler B' }} (s)</th><th>Bahnen</th></tr></thead>
+        <tbody>
+        {% for k in stafetten %}
+          <tr>
+            <td><strong>{{ k.bezeichnung }}</strong> <span class="muted">{{ k.wk_name.split('–')[-1].strip() }}</span></td>
+            <td><input type="number" step="0.1" name="za_{{ k.id }}" value="{{ '%.1f'|format(k.zuschlag_a) }}" style="width:80px"></td>
+            <td><input type="number" step="0.1" name="zb_{{ k.id }}" value="{{ '%.1f'|format(k.zuschlag_b) }}" style="width:80px"></td>
+            <td><input type="number" name="bahnen_{{ k.id }}" value="{{ k.bahnen }}" style="width:70px"></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card" style="margin-bottom:16px;">
+    <h3 style="margin-top:0;">Zeitplan &amp; Plausibilität pro Disziplin</h3>
+    <p class="muted" style="font-size:13px;margin:0 0 8px;">Anlagen und Zeit je Sportler:in steuern den Zeitplan-Generator.
+      Warn-Min/Max lösen bei der Eingabe eine Warnung aus (nur Hinweis).</p>
+    <div class="table-wrap" style="border:none;">
+      <table>
+        <thead><tr><th>Disziplin</th><th>Anlagen</th><th>Zeit/Turner (Min.)</th><th>Warn min</th><th>Warn max</th></tr></thead>
+        <tbody>
+        {% for k in kategorien %}
+          <tr>
+            <td><strong>{{ k.bezeichnung }}</strong> <span class="muted">{{ k.wk_name.split('–')[-1].strip() }}</span></td>
+            <td><input type="number" min="1" name="anl_{{ k.id }}" value="{{ k.anlagen or 1 }}" style="width:70px"></td>
+            <td><input type="number" step="0.1" name="zpt_{{ k.id }}" value="{{ '%g'|format(k.zeit_pro_turner or 0) }}" style="width:90px"></td>
+            <td><input type="number" step="0.01" name="wmin_{{ k.id }}" value="{{ '%g'|format(k.warn_min) if k.warn_min is not none else '' }}" style="width:90px"></td>
+            <td><input type="number" step="0.01" name="wmax_{{ k.id }}" value="{{ '%g'|format(k.warn_max) if k.warn_max is not none else '' }}" style="width:90px"></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="btn-row" style="margin-bottom:20px;"><button class="btn primary" type="submit">Einstellungen speichern</button></div>
+</form>
+
+<div class="grid-2" style="align-items:start;">
+  <div class="card">
+    <h3 style="margin-top:0;">Stammdaten</h3>
+    <p class="btn-row">
+      <a class="btn" href="{{ url_for('kategorien') }}">Kategorien</a>
+      <a class="btn" href="{{ url_for('disziplinen') }}">Disziplinen</a>
+      <a class="btn" href="{{ url_for('vereine') }}">Vereine</a>
+      <a class="btn" href="{{ url_for('wettkaempfe') }}">Wettkämpfe</a>
+    </p>
+    <hr class="soft">
+    <h3>Wettkampfbestimmungen</h3>
+    <p class="muted">Setzt für Turner/Turnerinnen die WKB-Wertung (Durchschnitt, 30% Auszeichnungen, Stafetten mit Final/Zuschlägen).</p>
+    <form method="post" action="{{ url_for('wkb_anwenden') }}"><button class="btn" type="submit">WKB anwenden</button></form>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Vorjahres-Rangliste</h3>
+    <p class="muted" style="font-size:13px;">Grundlage der automatischen Bahnen-/Serieneinteilung.
+      Aktuell <strong>{{ vorjahr_n }}</strong> Stafetten-Resultate gespeichert.
+      <a href="{{ url_for('vorjahr_ansicht') }}">Ansehen</a></p>
+    <form method="post" action="{{ url_for('vorjahr_import') }}" class="stack" style="max-width:none;">
+      <input type="text" name="pdf_pfad" placeholder="Pfad zur Rangliste-PDF (optional – sonst beigelegte 2025er)">
+      <button class="btn" type="submit">Vorjahr importieren</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Datensicherung</h3>
+    <p><a class="btn" href="{{ url_for('backup') }}">Backup herunterladen</a></p>
+    <p class="muted" style="font-size:13px;">Datenbank: <span class="mono">{{ db_pfad }}</span></p>
+    <hr class="soft">
+    <h3>Anmeldungen aus Excel</h3>
+    <p class="muted" style="font-size:13px;">TU/TI-Blätter mit automatischer Spaltenzuordnung und Prüfschritt.</p>
+    <a class="btn" href="{{ url_for('excel_import') }}">Excel importieren</a>
+    <hr class="soft">
+    <h3>Backup importieren</h3>
+    <form method="post" action="{{ url_for('backup_import') }}" class="stack" style="max-width:none;"
+          onsubmit="return confirm('Alle Daten ersetzen?')">
+      <input type="text" name="import_pfad" placeholder="/pfad/zum/Backup" required>
+      <button class="btn" type="submit">Importieren</button>
+    </form>
+    <hr class="soft">
+    <form method="post" action="{{ url_for('demo_laden') }}" onsubmit="return confirm('Alle Daten löschen und Demo laden?')">
+      <button class="btn danger" type="submit">Demo-Daten laden</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

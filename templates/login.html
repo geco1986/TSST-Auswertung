@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block loggedout %}
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="logo"><span class="mark">T</span> Auswertung TSST</div>
+    <p class="sub">Turnwettkampf-Auswertung</p>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flashes">
+          {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    <form method="post" class="stack">
+      <div>
+        <label for="kennung">Kennung / Station</label>
+        <input type="text" id="kennung" name="kennung" placeholder="z. B. Eingabe 1" autocomplete="off">
+        <p class="muted" style="margin:6px 0 0; font-size:12px;">Wird bei jeder Eingabe protokolliert (für die 4-Augen-Kontrolle).</p>
+      </div>
+      <div>
+        <label>Rolle wählen</label>
+        <p class="muted" style="margin:0 0 12px; font-size:13px;">
+          <strong>Eingeber</strong>: Teilnehmer und Resultate erfassen.<br>
+          <strong>Chef</strong>: zusätzlich Ranglisten, Stafetten-Selektion und Einstellungen.</p>
+      </div>
+      <button class="btn primary" type="submit" name="rolle" value="eingeber" style="width:100%;">Als Eingeber anmelden</button>
+      <button class="btn" type="submit" name="rolle" value="chef" style="width:100%;">Als Chef anmelden</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

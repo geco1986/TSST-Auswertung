@@ -1,0 +1,40 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8">
+<title>Einsatzplan {{ 'nach Anlage' if nach=='anlage' else 'nach Verein' }}</title>
+<style>
+  body{ font-family:Arial,Helvetica,sans-serif; color:#111; margin:20px; font-size:12px; }
+  .toolbar{ margin-bottom:12px; } .btn{ padding:8px 16px;border:1px solid #999;border-radius:8px;background:#14243b;color:#fff;cursor:pointer;font:inherit; }
+  h1{ font-size:16px; margin:0 0 8px; }
+  .grp{ break-inside:avoid; margin-bottom:14px; } h2{ font-size:13px; margin:12px 0 3px; }
+  table{ border-collapse:collapse; width:100%; } th,td{ border:1px solid #bbb; padding:3px 7px; text-align:left; }
+  th{ background:#f0f0f0; } td.n{ text-align:right; width:64px; font-variant-numeric:tabular-nums; }
+  @page { size: A4; }
+  @media print{ .toolbar{ display:none; } body{ margin:0; } }
+</style></head><body>
+<div class="toolbar"><button class="btn" onclick="window.print()">Drucken / als PDF speichern</button></div>
+<h1>Einsatzplan Vormittag — {{ 'nach Anlage' if nach=='anlage' else 'nach Verein' }}</h1>
+{% for g in gruppen %}
+  <div class="grp">
+    <h2>{{ g.kopf }}</h2>
+    <table>
+      <thead><tr><th class="n">Zeit</th>
+        {% if nach=='anlage' %}<th class="n">Start</th><th>Verein / Gruppe</th><th>Disziplin</th>
+        {% else %}<th class="n">Start</th><th>Disziplin</th><th>Anlage</th>{% endif %}</tr></thead>
+      <tbody>
+      {% for r in g.zeilen %}
+        <tr><td class="n">{{ r.startzeit }}</td>
+          {% if nach=='anlage' %}
+            <td class="n">{{ r.startnr }}</td>
+            <td>{{ r.verein_name }}{% if r.verein_zusatz %} {{ r.verein_zusatz }}{% endif %}{% if r.gruppennr %} ({{ r.gruppennr }}){% endif %}</td>
+            <td>{{ r.kat_name }}</td>
+          {% else %}
+            <td class="n">{{ r.startnr }}</td><td>{{ r.kat_name }}</td><td>{{ r.anlage }}</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <p>Noch kein Einsatzplan erzeugt.</p>
+{% endfor %}
+</body></html>

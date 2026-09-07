@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Kontrollblatt{% endblock %}
+{% block content %}
+<div class="page-head no-print">
+  <div><h1>Kontrollblatt (4-Augen-Kontrolle)</h1>
+    <p class="sub">Eigene Eingaben gegen die Notenblätter prüfen und quittieren</p></div>
+</div>
+
+<form method="get" class="searchbar no-print" style="margin-bottom:12px; gap:12px; flex-wrap:wrap;">
+  <label>Kennung/Station
+    <select name="kennung" onchange="this.form.submit()" style="width:180px">
+      {% for k in kennungen %}<option value="{{ k }}" {{ 'selected' if k==gewaehlt }}>{{ k }}</option>{% endfor %}
+      {% if not kennungen %}<option value="">(noch keine Eingaben)</option>{% endif %}
+    </select>
+  </label>
+  <label>Disziplin
+    <select name="kat" onchange="this.form.submit()" style="width:200px">
+      <option value="">alle</option>
+      {% for k in alle_kats %}<option value="{{ k.id }}" {{ 'selected' if kat_filter==k.id }}>{{ k.bezeichnung }}</option>{% endfor %}
+    </select>
+  </label>
+  <label class="checks" style="display:inline-flex;align-items:center;gap:6px;">
+    <input type="checkbox" name="offen" value="1" {{ 'checked' if nur_offen }} onchange="this.form.submit()"> nur nicht kontrollierte</label>
+  <button class="btn" type="button" onclick="druckenMitBackup()">Drucken &amp; Backup</button>
+</form>
+
+<div class="print-kopf" style="display:none;"><strong>Kontrollblatt</strong> — Kennung: {{ gewaehlt }} — {{ now if now }}</div>
+
+<form method="post">
+  <input type="hidden" name="aktion" value="quittieren">
+  <input type="hidden" name="kennung" value="{{ gewaehlt }}">
+  <input type="hidden" name="kat" value="{{ kat_filter or '' }}">
+  <input type="hidden" name="offen" value="{{ '1' if nur_offen else '' }}">
+  {% if not bloecke %}
+    <div class="card empty"><p>Keine offenen Eingaben für diese Kennung.</p></div>
+  {% endif %}
+  {% for b in bloecke %}
+    <h2 style="font-size:16px;margin:16px 0 6px;">{{ b.kat.bezeichnung }}</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th style="width:30px;" class="no-print"></th>
+          <th class="num">Start</th><th>Verein / Gruppe</th>
+          {% for p in b.positionen %}<th class="num">{{ loop.index }}</th>{% endfor %}
+          <th style="width:40px;">✓</th>
+        </tr></thead>
+        <tbody>
+        {% for e in b.eintraege %}
+          <tr>
+            <td class="no-print"><input type="checkbox" name="sel" value="{{ e.t.id }}"></td>
+            <td class="num mono">{{ e.t.startnr }}</td>
+            <td><strong>{{ e.t.verein_name or '—' }}</strong>{% if e.t.verein_zusatz %} {{ e.t.verein_zusatz }}{% endif %}{% if e.t.gruppennr %} ({{ e.t.gruppennr }}){% endif %}</td>
+            {% for w in e.werte %}<td class="num mono">{{ w }}</td>{% endfor %}
+            <td>{% if e.t.kontrolliert_am %}<span class="kranz">✓</span>{% else %}<span style="display:inline-block;width:16px;height:16px;border:1px solid #999;"></span>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endfor %}
+  {% if bloecke %}
+  <div class="savebar no-print">
+    <button class="btn primary" type="submit">Ausgewählte als kontrolliert markieren</button>
+    <span class="note">Papier-Notenblätter abgleichen, dann quittieren.</span>
+  </div>
+  {% endif %}
+</form>
+
+<script>
+function druckenMitBackup(){
+  // löst zuerst einen lokalen Backup-Download aus, dann den Druck
+  var f=document.createElement('iframe'); f.style.display='none';
+  f.src="{{ url_for('kontrollblatt_backup') }}"; document.body.appendChild(f);
+  setTimeout(function(){ window.print(); }, 800);
+}
+</script>
+<style>
+@media print {
+  .no-print{ display:none !important; }
+  .print-kopf{ display:block !important; margin-bottom:8px; }
+  .sidebar, nav, .topbar{ display:none !important; }
+}
+</style>
+{% endblock %}

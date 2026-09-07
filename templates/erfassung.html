@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Erfassung {{ kat.bezeichnung }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ kat.bezeichnung }}</h1>
+    <p class="sub">
+      {% if berechnung == 'durchschnitt' %}Bewertung: Durchschnitt aller {{ anzahl_werte }} Leistungen{% if einheit %} ({{ einheit }}){% endif %}
+      {% elif anzahl_werte == 1 %}Bewertung: Teamzeit{% if einheit %} ({{ einheit }}){% endif %}
+      {% else %}Bewertung: Summe der Werte{% if streich %} · schlechteste {{ streich }} gestrichen{% endif %}{% endif %}
+      {% if richtung == 'tief' %} · tiefer = besser{% else %} · höher = besser{% endif %}
+    </p></div>
+  <div class="spacer"></div>
+  <a class="btn" href="{{ url_for('rangliste', kid=kat.id) }}">Rangliste ansehen →</a>
+</div>
+
+{% if not teilnehmende %}
+  <div class="card empty">
+    <p>Noch keine Gruppen/Anmeldungen in dieser Disziplin.</p>
+    <a class="btn primary" href="{{ url_for('teilnehmer_form') }}">Anmeldung erfassen</a>
+  </div>
+{% else %}
+<form method="post" id="erf">
+  <div class="table-wrap erfassung">
+    <table id="grid">
+      <thead><tr>
+        <th class="num">Start</th><th>Gruppe</th>
+        {% for d in diszs %}
+          <th class="num" title="{{ d.bezeichnung }}">
+            {% if anzahl_werte == 1 %}{{ disz_bez }}{% if einheit %} ({{ einheit }}){% endif %}
+            {% else %}{{ loop.index }}{% endif %}
+          </th>
+        {% endfor %}
+        <th class="num">{% if berechnung == 'durchschnitt' %}Schnitt{% elif anzahl_werte == 1 %}Zeit{% else %}Total{% endif %}</th>
+      </tr></thead>
+      <tbody>
+      {% for t in teilnehmende %}
+        <tr data-tid="{{ t.id }}">
+          <td class="num startnr">{{ t.startnr }}</td>
+          <td>
+            {% if t.nachname or t.vorname %}
+              <strong>{{ t.nachname }}</strong>{% if t.vorname %}, {{ t.vorname }}{% endif %}
+              <div class="muted" style="font-size:12px;">{{ t.verein_name or '' }}</div>
+            {% else %}
+              <strong>{{ t.verein_name or '—' }}</strong>{% if t.verein_zusatz %} {{ t.verein_zusatz }}{% endif %}
+              {% if t.gruppennr %}<span class="pill">Gr. {{ t.gruppennr }}</span>{% endif %}
+            {% endif %}
+          </td>
+          {% for p in positionen %}
+            <td class="num">
+              <input type="text" inputmode="decimal" class="note-in"
+                name="note_{{ t.id }}_{{ p }}"
+                value="{{ werte[(t.id,p)] if (t.id,p) in werte else '' }}"
+                data-tid="{{ t.id }}" data-col="{{ loop.index0 }}">
+            </td>
+          {% endfor %}
+          <td class="num total" id="total_{{ t.id }}">-</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="savebar">
+    <button class="btn primary" type="submit">Resultate speichern</button>
+    <span class="note">
+      {% if anzahl_werte and anzahl_werte > 1 %}Pro Gruppe {{ anzahl_werte }} Einzelleistungen{% if einheit %} in {{ einheit }}{% endif %}. {% endif %}
+      Tipp: mit <strong>Enter</strong> zur nächsten Gruppe in derselben Spalte springen.</span>
+  </div>
+</form>
+
+<script>
+const BERECHNUNG = "{{ berechnung }}";
+const STREICH = {{ streich }};
+function rechne(tid){
+  const inputs = document.querySelectorAll('input[name^="note_'+tid+'_"]');
+  let werte = [];
+  inputs.forEach(i => {
+    const v = parseFloat((i.value||'').replace(',','.'));
+    if(!isNaN(v)) werte.push(v);
+  });
+  const cell = document.getElementById('total_'+tid);
+  if(werte.length === 0){ cell.textContent = '-'; return; }
+  let out;
+  if(BERECHNUNG === 'durchschnitt'){
+    out = werte.reduce((a,b)=>a+b,0) / werte.length;
+  } else {
+    let total = werte.reduce((a,b)=>a+b,0);
+    if(STREICH > 0 && werte.length > STREICH){
+      const sorted = [...werte].sort((a,b)=>a-b);
+      total -= sorted.slice(0, STREICH).reduce((a,b)=>a+b,0);
+    }
+    out = total;
+  }
+  cell.textContent = out.toFixed(2);
+}
+document.querySelectorAll('.note-in').forEach(inp=>{
+  inp.addEventListener('input', ()=>rechne(inp.dataset.tid));
+  inp.addEventListener('keydown', e=>{
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      const col = inp.dataset.col;
+      const all = [...document.querySelectorAll('.note-in')].filter(x=>x.dataset.col===col);
+      const idx = all.indexOf(inp);
+      if(idx > -1 && idx+1 < all.length) all[idx+1].focus();
+    }
+  });
+});
+{% for t in teilnehmende %}rechne({{ t.id }});{% endfor %}
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Kategorien{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Kategorien</h1><p class="sub">Wettkampf-Kategorien (tabKategorien) mit Disziplinen und Wertungsregeln</p></div>
+  <div class="spacer"></div>
+  <a class="btn primary" href="{{ url_for('kategorie_form') }}">+ Kategorie</a>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th>Kategorie</th><th>Typ</th><th>Geschl.</th><th>Disziplinen</th>
+      <th class="num">Streich</th><th>Auszeichnung</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for k in liste %}
+      <tr>
+        <td><strong>{{ k.bezeichnung }}</strong>{% if k.abk %} <span class="pill">{{ k.abk }}</span>{% endif %}
+          {% if k.sparte %}<div class="muted" style="font-size:12px;">{{ k.sparte }}</div>{% endif %}</td>
+        <td>{{ typen.get(k.typ, k.typ) }}</td>
+        <td>{{ {'m':'♂ Tu','w':'♀ Ti','alle':'alle'}.get(k.geschlecht, k.geschlecht) }}</td>
+        <td class="muted">
+          {% for d in k.diszs %}{{ d.abk or d.bezeichnung }}{% if not loop.last %} · {% endif %}{% else %}<span class="muted">—</span>{% endfor %}
+        </td>
+        <td class="num">{{ k.streich }}</td>
+        <td>
+          {% if k.kranz_modus == 'prozent' %}beste {{ k.kranz_wert|round(0)|int }} %
+          {% elif k.kranz_modus == 'schwelle' %}ab {{ '%.2f'|format(k.kranz_wert) }}
+          {% else %}keine{% endif %}
+        </td>
+        <td class="right btn-row" style="justify-content:flex-end;">
+          <a class="btn sm" href="{{ url_for('kategorie_form', kid=k.id) }}">Bearbeiten</a>
+          <form method="post" action="{{ url_for('kategorie_loeschen', kid=k.id) }}" onsubmit="return confirm('Kategorie löschen?')">
+            <button class="btn sm danger">Löschen</button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="muted">Noch keine Kategorien. <a href="{{ url_for('kategorie_form') }}">Erste anlegen →</a></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

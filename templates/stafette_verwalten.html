@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Stafette {{ kat.bezeichnung }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ kat.bezeichnung }}</h1>
+    <p class="sub">Zeit + Übergabefehler{% if kat.hat_final %} · Vorlauf &amp; Final{% endif %}
+      · Zuschlag: {{ kat.zuschlag_a_label }} +{{ '%.1f'|format(kat.zuschlag_a) }}s, {{ kat.zuschlag_b_label }} +{{ '%.1f'|format(kat.zuschlag_b) }}s</p></div>
+  <div class="spacer"></div>
+  {% if kat.hat_final %}
+    <form method="post" action="{{ url_for('stafette_selektion', kid=kat.id) }}" style="display:inline">
+      <button class="btn" type="submit">Selektion aus Vorlauf</button></form>
+  {% endif %}
+  <a class="btn" href="{{ url_for('stafette_bahnen', kid=kat.id) }}">Bahnen/Serien</a>
+  <a class="btn" href="{{ url_for('rangliste', kid=kat.id) }}">Rangliste</a>
+</div>
+
+<form method="post">
+  <div class="table-wrap erfassung">
+    <table>
+      <thead><tr>
+        <th class="num">Start</th><th>Gruppe</th>
+        {% if kat.hat_final %}
+          <th class="num">Vorlauf</th><th class="num" title="{{ kat.zuschlag_a_label }}">Fa</th><th class="num" title="{{ kat.zuschlag_b_label }}">Fb</th><th class="num">=Zeit</th>
+          <th>Final</th>
+          <th class="num">Finalzeit</th><th class="num">Fa</th><th class="num">Fb</th><th class="num">=Zeit</th>
+        {% else %}
+          <th class="num">Zeit</th><th class="num" title="{{ kat.zuschlag_a_label }}">Fa</th><th class="num" title="{{ kat.zuschlag_b_label }}">Fb</th><th class="num">=Endzeit</th>
+        {% endif %}
+        <th>Vermerk</th>
+      </tr></thead>
+      <tbody>
+      {% for r in rows %}
+        {% set t = r.t %}
+        <tr>
+          <td class="num startnr">{{ t.startnr }}</td>
+          <td><strong>{{ t.verein_name or '—' }}</strong>{% if t.verein_zusatz %} {{ t.verein_zusatz }}{% endif %}{% if t.gruppennr %} <span class="pill">Gr. {{ t.gruppennr }}</span>{% endif %}</td>
+          {% if kat.hat_final %}
+            <td class="num"><input type="text" name="v_{{ t.id }}_zeit" style="width:74px" value="{{ fmt_zeit(r.vorlauf['rohzeit']) if r.vorlauf and r.vorlauf['rohzeit'] is not none else '' }}"></td>
+            <td class="num"><input type="number" min="0" name="v_{{ t.id }}_fa" style="width:44px" value="{{ r.vorlauf['fehler_a'] if r.vorlauf else 0 }}"></td>
+            <td class="num"><input type="number" min="0" name="v_{{ t.id }}_fb" style="width:44px" value="{{ r.vorlauf['fehler_b'] if r.vorlauf else 0 }}"></td>
+            <td class="num total">{{ fmt_zeit(r.vz) }}</td>
+            <td>
+              <select name="sel_{{ t.id }}" style="width:70px">
+                <option value="">—</option>
+                {% if kat.final_typ=='ab' %}
+                  <option value="A" {{ 'selected' if t.final_gruppe=='A' }}>A</option>
+                  <option value="B" {{ 'selected' if t.final_gruppe=='B' }}>B</option>
+                {% else %}
+                  <option value="F" {{ 'selected' if t.final_gruppe in ('F','A') }}>Final</option>
+                {% endif %}
+              </select>
+            </td>
+            <td class="num"><input type="text" name="f_{{ t.id }}_zeit" style="width:74px" value="{{ fmt_zeit(r.final['rohzeit']) if r.final and r.final['rohzeit'] is not none else '' }}"></td>
+            <td class="num"><input type="number" min="0" name="f_{{ t.id }}_fa" style="width:44px" value="{{ r.final['fehler_a'] if r.final else 0 }}"></td>
+            <td class="num"><input type="number" min="0" name="f_{{ t.id }}_fb" style="width:44px" value="{{ r.final['fehler_b'] if r.final else 0 }}"></td>
+            <td class="num total">{{ fmt_zeit(r.fz) }}</td>
+          {% else %}
+            <td class="num"><input type="text" name="f_{{ t.id }}_zeit" style="width:74px" value="{{ fmt_zeit(r.final['rohzeit']) if r.final and r.final['rohzeit'] is not none else '' }}"></td>
+            <td class="num"><input type="number" min="0" name="f_{{ t.id }}_fa" style="width:44px" value="{{ r.final['fehler_a'] if r.final else 0 }}"></td>
+            <td class="num"><input type="number" min="0" name="f_{{ t.id }}_fb" style="width:44px" value="{{ r.final['fehler_b'] if r.final else 0 }}"></td>
+            <td class="num total">{{ fmt_zeit(r.fz) }}</td>
+          {% endif %}
+          <td>
+            <select name="status_{{ t.id }}" style="width:120px">
+              <option value="">— gewertet —</option>
+              {% for key,label in status_labels.items() %}
+                <option value="{{ key }}" {{ 'selected' if t.status==key }}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="savebar"><button class="btn primary" type="submit">Speichern</button>
+    <span class="note">Zeit als Sekunden (52.86) oder m:ss.ss (2:33.17). „=Zeit" wird nach dem Speichern neu berechnet.</span></div>
+</form>
+{% endblock %}

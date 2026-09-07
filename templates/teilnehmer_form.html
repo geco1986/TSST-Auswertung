@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Teilnehmer{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <h1>{{ 'Teilnehmer bearbeiten' if tn else 'Neuer Teilnehmer' }}</h1>
+  <p class="sub">{{ 'Änderungen speichern' if tn else 'Nach dem Speichern erscheint gleich das nächste leere Formular' }}</p>
+</div></div>
+
+<form method="post" class="stack">
+  <div class="grid-2">
+    <div><label>Startnummer <span class="hint">(leer = automatisch {{ naechste_nr }})</span></label>
+      <input type="number" name="startnr" value="{{ tn.startnr if tn }}" placeholder="{{ naechste_nr }}"></div>
+    <div><label>Jahrgang</label>
+      <input type="number" name="jahrgang" value="{{ tn.jahrgang if tn }}" placeholder="2012"></div>
+  </div>
+  <div class="grid-2">
+    <div><label>Vorname</label><input type="text" name="vorname" value="{{ tn.vorname if tn }}"></div>
+    <div><label>Nachname</label><input type="text" name="nachname" value="{{ tn.nachname if tn }}" required autofocus></div>
+  </div>
+  <div class="grid-2">
+    <div><label>Geschlecht</label>
+      <select name="geschlecht">
+        <option value="">—</option>
+        <option value="m" {{ 'selected' if tn and tn.geschlecht=='m' }}>Turner (m)</option>
+        <option value="w" {{ 'selected' if tn and tn.geschlecht=='w' }}>Turnerin (w)</option>
+      </select></div>
+    <div><label>Stationsnr.</label><input type="text" name="stationsnr" value="{{ tn.stationsnr if tn }}"></div>
+  </div>
+  <div class="grid-2">
+    <div><label>Verein</label>
+      <select name="verein_id">
+        <option value="">—</option>
+        {% for v in vereine %}<option value="{{ v.id }}" {{ 'selected' if tn and tn.verein_id==v.id }}>{{ v.name }}{% if v.zusatz %} ({{ v.zusatz }}){% endif %}</option>{% endfor %}
+      </select></div>
+    <div><label>Kategorie</label>
+      <select name="kategorie_id">
+        <option value="">—</option>
+        {% for k in kategorien %}<option value="{{ k.id }}" {{ 'selected' if tn and tn.kategorie_id==k.id }}>{{ k.bezeichnung }}</option>{% endfor %}
+      </select></div>
+  </div>
+  <div class="grid-2">
+    <div><label>Vermerk <span class="hint">(nicht gewertet)</span></label>
+      <select name="status">
+        <option value="">— gewertet —</option>
+        {% for key, label in status_labels.items() %}
+          <option value="{{ key }}" {{ 'selected' if tn and tn.status==key }}>{{ label }}</option>
+        {% endfor %}
+      </select></div>
+    <div><label>Bemerkung <span class="hint">(frei)</span></label>
+      <input type="text" name="bemerkung" value="{{ tn.bemerkung if tn and tn.bemerkung }}"></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn primary" type="submit">{{ 'Speichern' if tn else 'Speichern & nächster' }}</button>
+    <a class="btn ghost" href="{{ url_for('teilnehmer') }}">Zur Liste</a>
+  </div>
+</form>
+{% endblock %}

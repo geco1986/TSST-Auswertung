@@ -1,0 +1,18 @@
+services:
+  debra-web:
+    build: .
+    image: auswertung-tsst:latest
+    container_name: auswertung-tsst
+    ports:
+      - "5000:5000"          # Host:Container – bei Bedarf Host-Port ändern
+    volumes:
+      - debra-data:/data     # persistente SQLite-Datenbank
+    environment:
+      DEBRA_DB: /data/debra.sqlite3
+      DEBRA_SECRET: "bitte-hier-einen-eigenen-zufallswert-setzen"
+      DEBRA_SEED: "1"        # 1 = bei leerer DB Demo-Daten laden, 0 = leer starten
+      PORT: "5000"
+    restart: unless-stopped
+
+volumes:
+  debra-data:

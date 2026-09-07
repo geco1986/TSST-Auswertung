@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Übersicht{% endblock %} · Auswertung TSST</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+{% if aktueller_user %}
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo"><span class="mark">T</span> Auswertung TSST</div>
+      <small>Turnwettkampf-Auswertung</small>
+    </div>
+    <nav class="nav">
+      {% set p = request.path %}
+      {% macro navlink(endpoint, icon, label, match=None) -%}
+        {% set href = url_for(endpoint) %}
+        <a href="{{ href }}" class="{{ 'active' if (p == href or (match and p.startswith(match))) }}">
+          <span class="ic">{{ icon }}</span> {{ label }}
+        </a>
+      {%- endmacro %}
+
+      {{ navlink('dashboard', '▦', 'Übersicht') }}
+
+      <div class="group">Erfassung</div>
+      {{ navlink('schnellerfassung', '⚡', 'Schnellerfassung') }}
+      {{ navlink('teilnehmer', '☰', 'Teilnehmer', '/teilnehmer') }}
+      {{ navlink('mutation', '⇌', 'Mutation') }}
+      {{ navlink('erfassung_index', '✎', 'Nach Disziplin', '/erfassung') }}
+      {{ navlink('erfassungskontrolle', '◱', 'Erfassungskontrolle') }}
+      {{ navlink('kontrollblatt', '✓', 'Kontrollblatt') }}
+
+      {% if ist_chef %}
+      <div class="group">Auswertung</div>
+      {{ navlink('rangliste_index', '★', 'Ranglisten', '/rangliste') }}
+      {{ navlink('kranzliste', '❦', 'Kranzliste') }}
+      {{ navlink('top_leistungen', '⚑', 'Top-Leistungen') }}
+      {{ navlink('aenderungen', '⟳', 'Änderungs-Log') }}
+      {{ navlink('vereinsblatt', '▤', 'Vereinsblatt') }}
+
+      <div class="group">Stafetten</div>
+      {{ navlink('stafetten_index', '⇄', 'Selektion & Bahnen', '/stafetten') }}
+      {{ navlink('vorjahr_ansicht', '↺', 'Vorjahr (Setzung)') }}
+
+      <div class="group">Listen</div>
+      {{ navlink('listen', '▤', 'Listen & Statistik') }}
+      {{ navlink('einsatzplan', '◷', 'Einsatzplan (Vormittag)') }}
+      {{ navlink('notenblaetter', '▦', 'Notenblätter/Startlisten') }}
+      {{ navlink('zeitplan', '☷', 'Zeitplan (Import)') }}
+
+      <div class="group">Konfiguration</div>
+      {{ navlink('einstellungen', '⚙', 'Einstellungen') }}
+      {{ navlink('kategorien', '▥', 'Kategorien', '/kategorien') }}
+      {{ navlink('disziplinen', '◈', 'Disziplinen') }}
+      {{ navlink('vereine', '⬢', 'Vereine') }}
+      {% endif %}
+    </nav>
+    <div class="foot">
+      angemeldet als <strong>{{ aktueller_user }}</strong>
+      <span class="pill" style="font-size:11px;">{{ 'Chef' if ist_chef else 'Eingeber' }}</span><br>
+      <a href="{{ url_for('logout') }}">Abmelden</a>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      {% if aktueller_wettkampf %}
+        <div class="wk">{{ aktueller_wettkampf['name'] }}
+          <span class="meta">{{ aktueller_wettkampf['ort'] }}{% if aktueller_wettkampf['datum'] %} · {{ aktueller_wettkampf['datum'] }}{% endif %}</span>
+        </div>
+      {% else %}
+        <div class="wk muted">Kein Wettkampf aktiv</div>
+      {% endif %}
+      <div class="spacer"></div>
+      <div class="user">Auswertung TSST · v{{ "1.0" }}</div>
+    </div>
+
+    <div class="content">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flashes">
+            {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+{% else %}
+  {% block loggedout %}{% endblock %}
+{% endif %}
+<script>
+// Sortierbare Listen: Klick auf Spaltenkopf sortiert auf-/absteigend.
+document.querySelectorAll('table.sortable').forEach(function(tbl){
+  var ths = tbl.tHead ? tbl.tHead.rows[0].cells : [];
+  Array.prototype.forEach.call(ths, function(th, idx){
+    if(th.classList.contains('no-sort')) return;
+    th.style.cursor='pointer'; th.title='Sortieren';
+    var arrow=document.createElement('span'); arrow.style.opacity='0.4'; arrow.style.fontSize='11px';
+    arrow.textContent=' ↕'; th.appendChild(arrow);
+    th.addEventListener('click', function(){
+      var body=tbl.tBodies[0]; if(!body) return;
+      var rows=Array.prototype.slice.call(body.rows).filter(r=>r.cells.length>idx);
+      var asc = th.getAttribute('data-dir')!=='asc';
+      Array.prototype.forEach.call(ths, function(o){ o.setAttribute('data-dir',''); var a=o.querySelector('span'); if(a)a.textContent=' ↕'; });
+      th.setAttribute('data-dir', asc?'asc':'desc'); arrow.textContent = asc?' ↑':' ↓';
+      rows.sort(function(a,b){
+        var ca=a.cells[idx], cb=b.cells[idx];
+        var dsa=ca.getAttribute('data-sort'), dsb=cb.getAttribute('data-sort');
+        if(dsa!==null && dsb!==null){
+          var na=parseFloat(dsa), nb=parseFloat(dsb);
+          var cc=(na-nb); return asc?cc:-cc;
+        }
+        var x=(ca.innerText||'').trim(), y=(cb.innerText||'').trim();
+        var nx=parseFloat(x.replace(',','.')), ny=parseFloat(y.replace(',','.'));
+        var both=!isNaN(nx)&&!isNaN(ny);
+        var c = both ? (nx-ny) : x.localeCompare(y,'de',{numeric:true});
+        return asc?c:-c;
+      });
+      rows.forEach(function(r){ body.appendChild(r); });
+    });
+  });
+});
+</script>
+</body>
+</html>

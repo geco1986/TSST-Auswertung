@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Erfassungskontrolle{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Erfassungskontrolle</h1><p class="sub">Wo fehlen noch Resultate?</p></div></div>
+{% for b in bloecke %}
+  <h2 style="font-size:17px; margin:18px 0 8px;">{{ b.wk.name }}</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Disziplin</th><th class="num">Anmeldungen</th><th class="num">Erfasst</th><th class="num">Kontrolliert</th><th class="num">Fehlt</th><th style="width:160px;">Fortschritt</th><th></th></tr></thead>
+      <tbody>
+      {% for z in b.zeilen %}
+        <tr>
+          <td><strong>{{ z.kat.bezeichnung }}</strong>{% if z.kat.ist_stafette %} <span class="pill">Stafette</span>{% endif %}{% if z.abgeschlossen %} <span class="pill" style="background:#e5f4ea;color:#1a6e3d">abgeschlossen</span>{% endif %}</td>
+          <td class="num mono">{{ z.tn }}</td>
+          <td class="num mono">{{ z.mit }}</td>
+          <td class="num mono">{{ z.kontrolliert }}</td>
+          <td class="num mono">{% if z.fehlt %}<strong style="color:var(--accent-d)">{{ z.fehlt }}</strong>{% else %}0{% endif %}</td>
+          <td>
+            <div style="background:#eef2f7;border-radius:6px;height:8px;overflow:hidden;">
+              <div style="height:8px;width:{{ (z.mit/z.tn*100)|round|int if z.tn else 0 }}%;background:{{ 'var(--good)' if z.fehlt==0 else 'var(--accent)' }};"></div>
+            </div>
+          </td>
+          <td class="right btn-row" style="justify-content:flex-end;">
+            {% if ist_chef and z.vollstaendig and not z.abgeschlossen %}
+              <form method="post" action="{{ url_for('disziplin_abschliessen', kid=z.kat.id) }}" style="display:inline">
+                <button class="btn sm" type="submit">Abschliessen</button></form>
+            {% elif z.abgeschlossen %}
+              <a class="btn sm" href="{{ url_for('disziplin_fertig', kid=z.kat.id) }}" target="_blank">Fertig-Blatt</a>
+            {% endif %}
+            {% if ist_chef %}<a class="btn sm" href="{{ url_for('rangliste', kid=z.kat.id) }}">Rangliste</a>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endfor %}
+{% endblock %}

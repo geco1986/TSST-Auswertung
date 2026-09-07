@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Kranzliste{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Kranzliste</h1><p class="sub">Ausgezeichnete Gruppen für die Rangverkündigung</p></div>
+  <div class="spacer"></div>
+  <a class="btn" href="{{ url_for('kranzliste', druck=1) }}" target="_blank">Drucken</a>
+</div>
+{% if not bloecke %}<div class="card empty"><p>Noch keine Auszeichnungen – es sind noch keine Resultate erfasst.</p></div>{% endif %}
+{% for b in bloecke %}
+  <h2 style="font-size:17px; margin:18px 0 8px;">{{ b.wk.name }}</h2>
+  {% for kb in b.kats %}
+    <div class="card" style="margin-bottom:14px;">
+      <h3 style="margin:0 0 8px; font-size:15px;">{{ kb.kat.bezeichnung }}
+        <span class="muted" style="font-weight:400;">({{ kb.eintraege|length }} Auszeichnungen)</span></h3>
+      <div class="table-wrap" style="border:none;">
+        <table class="sortable">
+          <thead><tr><th class="num">Rang</th><th>Gruppe</th><th class="num">Resultat</th><th></th></tr></thead>
+          <tbody>
+          {% for e in kb.eintraege %}
+            <tr class="{{ 'rang-1' if e.rang==1 }}">
+              <td class="num"><span class="rangnr">{{ e.rang }}</span></td>
+              <td><strong>{{ e.anzeige }}</strong></td>
+              <td class="num total">{% if kb.einheit=='s' %}{{ fmt_zeit(e.total) }}{% else %}{{ '%.2f'|format(e.total) if e.total is not none else '' }}{% endif %}{% if kb.einheit and kb.einheit!='s' %} {{ kb.einheit }}{% endif %}</td>
+              <td><span class="kranz">{{ e.marker or '✦' }}</span></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endfor %}
+{% endfor %}
+{% if druck %}<script>window.print()</script>{% endif %}
+{% endblock %}

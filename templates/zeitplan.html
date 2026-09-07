@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Zeitplan{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Zeitplan</h1><p class="sub">Programm des Wettkampftags (tabZeitplan)</p></div></div>
+
+<div class="grid-2" style="align-items:start; grid-template-columns: 1.4fr 1fr;">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th class="num">Zeit</th><th>Programmpunkt</th><th>Ort</th><th>Bemerkung</th><th></th></tr></thead>
+      <tbody>
+      {% for z in liste %}
+        <tr>
+          <td class="num mono">{{ z.zeit }}</td>
+          <td><strong>{{ z.programmpunkt }}</strong></td>
+          <td>{{ z.ort or '' }}</td>
+          <td class="muted">{{ z.bemerkung or '' }}</td>
+          <td class="right btn-row" style="justify-content:flex-end;">
+            <button class="btn sm" type="button"
+              onclick='fuellen({{ z.id }}, {{ z.zeit|tojson }}, {{ z.programmpunkt|tojson }}, {{ z.ort|tojson }}, {{ z.bemerkung|tojson }})'>Bearbeiten</button>
+            <form method="post" action="{{ url_for('zeitplan_loeschen', zid=z.id) }}" onsubmit="return confirm('Eintrag löschen?')">
+              <button class="btn sm danger">Löschen</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="muted">Noch keine Einträge.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 id="formtitel" style="margin-top:0;">Neuer Eintrag</h3>
+    <form method="post" class="stack" style="max-width:none;" id="zform">
+      <input type="hidden" name="id" id="f_id">
+      <div><label>Zeit</label><input type="text" name="zeit" id="f_zeit" placeholder="09:00"></div>
+      <div><label>Programmpunkt</label><input type="text" name="programmpunkt" id="f_pp" required></div>
+      <div><label>Ort</label><input type="text" name="ort" id="f_ort"></div>
+      <div><label>Bemerkung</label><input type="text" name="bemerkung" id="f_bem"></div>
+      <div class="btn-row">
+        <button class="btn primary" type="submit">Speichern</button>
+        <button class="btn ghost" type="button" onclick="neu()">Neu</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+function fuellen(id,zeit,pp,ort,bem){
+  f_id.value=id; f_zeit.value=zeit||''; f_pp.value=pp||''; f_ort.value=ort||''; f_bem.value=bem||'';
+  document.getElementById('formtitel').textContent='Eintrag bearbeiten'; f_pp.focus();
+}
+function neu(){ document.getElementById('zform').reset(); f_id.value='';
+  document.getElementById('formtitel').textContent='Neuer Eintrag'; }
+</script>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Übersicht{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Übersicht</h1>
+    <p class="sub">Aktueller Wettkampf und Erfassungsstand</p>
+  </div>
+  <div class="spacer"></div>
+  <a class="btn" href="{{ url_for('wettkaempfe') }}">Wettkampf wechseln</a>
+</div>
+
+{% if not aktueller_wettkampf %}
+  <div class="card empty">
+    <div class="ic">◆</div>
+    <h3>Noch kein Wettkampf</h3>
+    <p>Lege zuerst einen Wettkampf an, dann Kategorien, Vereine und Teilnehmer.</p>
+    <a class="btn primary" href="{{ url_for('wettkaempfe') }}">Wettkampf anlegen</a>
+  </div>
+{% else %}
+  <div class="cards" style="margin-bottom:24px;">
+    <div class="card stat"><div class="kpi">{{ stats.teilnehmer }}</div><div class="label">Teilnehmer</div></div>
+    <div class="card stat"><div class="kpi">{{ stats.kategorien }}</div><div class="label">Kategorien</div></div>
+    <div class="card stat"><div class="kpi">{{ stats.vereine }}</div><div class="label">Vereine</div></div>
+  </div>
+
+  <h2 style="font-size:18px; margin:0 0 12px;">Kategorien &amp; Erfassungsstand</h2>
+  {% if kategorien %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Kategorie</th><th>Typ</th><th class="num">Teilnehmer</th>
+        <th class="num">Erfasst</th><th style="width:180px;">Fortschritt</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for k in kategorien %}
+        <tr>
+          <td><strong>{{ k.bezeichnung }}</strong>{% if k.abk %} <span class="pill">{{ k.abk }}</span>{% endif %}</td>
+          <td>{{ KATEGORIE_TYPEN.get(k.typ, k.typ) }}</td>
+          <td class="num">{{ k.tn }}</td>
+          <td class="num">{{ k.mit_resultat }}</td>
+          <td>
+            <div style="background:#eef2f7;border-radius:6px;height:8px;overflow:hidden;">
+              <div style="height:8px;width:{{ k.fortschritt }}%;background:var(--good);"></div>
+            </div>
+          </td>
+          <td class="right">
+            {% if k.ist_stafette and ist_chef %}
+              <a class="btn sm" href="{{ url_for('stafette_verwalten', kid=k.id) }}">Erfassen</a>
+            {% else %}
+              <a class="btn sm" href="{{ url_for('erfassung', kid=k.id) }}">Erfassen</a>
+            {% endif %}
+            {% if ist_chef %}<a class="btn sm" href="{{ url_for('rangliste', kid=k.id) }}">Rangliste</a>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="card empty"><p>Noch keine Kategorien. <a href="{{ url_for('kategorie_form') }}">Erste Kategorie anlegen →</a></p></div>
+  {% endif %}
+{% endif %}
+{% endblock %}

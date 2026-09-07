@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Resultate erfassen{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Resultate erfassen</h1><p class="sub">Kategorie wählen und Noten im Raster eingeben</p></div>
+  <div class="spacer"></div>
+  <a class="btn primary" href="{{ url_for('schnellerfassung') }}">⚡ Schnellerfassung per Startnummer</a>
+</div>
+{% if kategorien %}
+<div class="tiles">
+  {% for k in kategorien %}
+    <a class="tile" href="{{ url_for('erfassung', kid=k.id) }}">
+      <div class="ic">✎</div>
+      <h3>{{ k.bezeichnung }}</h3>
+      <p>{{ KATEGORIE_TYPEN.get(k.typ, k.typ) }}{% if k.abk %} · {{ k.abk }}{% endif %}</p>
+    </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card empty"><p>Keine Kategorien vorhanden. <a href="{{ url_for('kategorie_form') }}">Kategorie anlegen →</a></p></div>
+{% endif %}
+{% endblock %}

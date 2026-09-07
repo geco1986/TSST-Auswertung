@@ -1,0 +1,32 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8">
+<title>Disziplin fertig — {{ kat.bezeichnung }}</title>
+<style>
+  body{ font-family:Arial,Helvetica,sans-serif; color:#111; margin:0; }
+  .toolbar{ padding:12px 18px; } .btn{ padding:8px 16px;border:1px solid #999;border-radius:8px;background:#14243b;color:#fff;cursor:pointer;font:inherit; }
+  .blatt{ width:20cm; max-width:100%; margin:0 auto; padding:24px; }
+  h1{ text-align:center; font-size:26px; margin:10px 0 4px; }
+  .stempel{ text-align:center; color:#1a6e3d; border:3px solid #1a6e3d; border-radius:10px;
+            font-size:22px; font-weight:bold; padding:10px 0; margin:18px 0; letter-spacing:1px; }
+  table{ width:100%; border-collapse:collapse; margin:18px 0; } td{ padding:8px 6px; font-size:15px; }
+  .lab{ font-weight:bold; width:220px; }
+  .sig{ margin-top:50px; display:flex; gap:60px; }
+  .sig div{ flex:1; border-top:1.5px solid #111; padding-top:6px; text-align:center; }
+  @media print{ .toolbar{ display:none; } }
+  @page { size: A4; }
+</style></head><body>
+<div class="toolbar"><button class="btn" onclick="window.print()">Drucken / als PDF speichern</button></div>
+<div class="blatt">
+  <h1>{{ kat.bezeichnung }}</h1>
+  <div style="text-align:center;color:#555;">{{ kat.wk_name }}</div>
+  <div class="stempel">DISZIPLIN FERTIG ERFASST</div>
+  <table>
+    <tr><td class="lab">Anzahl Gruppen</td><td>{{ anz }}</td></tr>
+    <tr><td class="lab">Abgeschlossen von</td><td>{{ kat.abgeschlossen_von or '' }}</td></tr>
+    <tr><td class="lab">Datum / Uhrzeit</td><td>{{ kat.abgeschlossen_am or '' }}</td></tr>
+  </table>
+  <div class="sig">
+    <div>Erfassung</div>
+    <div>Kontrolle (4-Augen)</div>
+  </div>
+</div>
+</body></html>

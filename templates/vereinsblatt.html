@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Vereinsblatt{% endblock %}
+{% block content %}
+<div class="page-head no-print"><div><h1>Vereinsblatt</h1><p class="sub">Alle Resultate nach Verein – Vorlage für die Vereinsmitteilung</p></div>
+  <div class="spacer"></div>
+  <button class="btn" type="button" onclick="window.print()">Drucken / als PDF speichern</button>
+</div>
+
+{% if not daten %}
+  <div class="card empty"><p>Noch keine Resultate erfasst.</p></div>
+{% else %}
+  {% for verein, eintraege in daten.items() %}
+    <div class="card vblatt" style="margin-bottom:18px;">
+      <h2 style="margin:0 0 10px; font-size:18px;">{{ verein }}</h2>
+      <div class="table-wrap" style="border:none;">
+        <table>
+          <thead><tr><th>Kategorie</th><th>Name</th><th class="num">JG</th><th class="num">Rang</th><th class="num">Total</th><th></th></tr></thead>
+          <tbody>
+          {% for e in eintraege %}
+            <tr>
+              <td>{{ e.kategorie }}</td>
+              <td><strong>{{ e.name }}</strong></td>
+              <td class="num mono">{{ e.jahrgang or '' }}</td>
+              <td class="num mono">{{ e.rang or '–' }}</td>
+              <td class="num total">{{ '%.2f'|format(e.total) if e.total is not none else '–' }}</td>
+              <td>{% if e.auszeichnung %}<span class="kranz">✦</span>{% endif %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endfor %}
+{% endif %}
+<style>
+@page { size: A4; }
+@media print {
+  .no-print, .sidebar, nav, .topbar { display:none !important; }
+  .vblatt { box-shadow:none; border:none; page-break-after:always; break-after:page; margin:0 !important; }
+  .vblatt:last-child { page-break-after:auto; break-after:auto; }
+}
+</style>
+{% endblock %}

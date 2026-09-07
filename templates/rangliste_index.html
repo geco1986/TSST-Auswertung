@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Ranglisten{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Ranglisten</h1><p class="sub">Auswertung je Kategorie</p></div>
+  <div class="spacer"></div>
+  <a class="btn" href="{{ url_for('rangliste_druck_alle') }}" target="_blank">Gesamtrangliste drucken</a>
+</div>
+{% if kategorien %}
+<div class="tiles">
+  {% for k in kategorien %}
+    <a class="tile" href="{{ url_for('rangliste', kid=k.id) }}">
+      <div class="ic">★</div>
+      <h3>{{ k.bezeichnung }}</h3>
+      <p>{{ KATEGORIE_TYPEN.get(k.typ, k.typ) }}{% if k.abk %} · {{ k.abk }}{% endif %}</p>
+    </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card empty"><p>Keine Kategorien vorhanden.</p></div>
+{% endif %}
+{% endblock %}

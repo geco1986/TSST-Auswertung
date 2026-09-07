@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Mutation{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Mutation</h1><p class="sub">Ab-/Nachmeldungen – Suche nach Verein oder Startnummer</p></div>
+  <div class="spacer"></div>
+  <a class="btn primary" href="{{ url_for('teilnehmer_form') }}">Neue Anmeldung</a>
+</div>
+
+<form method="get" class="searchbar" style="margin-bottom:16px;">
+  <input type="text" name="q" value="{{ q }}" placeholder="Verein oder Startnummer…" autofocus
+         style="max-width:360px;">
+  <button class="btn" type="submit">Suchen</button>
+</form>
+
+{% if q and not treffer %}
+  <div class="card empty"><p>Keine Treffer für „{{ q }}".</p></div>
+{% elif treffer %}
+<form method="post" action="{{ url_for('teilnehmer_sammelaktion') }}">
+  <input type="hidden" name="next" value="{{ url_for('mutation', q=q) }}">
+  <div class="table-wrap">
+    <table class="sortable">
+      <thead><tr>
+        <th class="no-sort" style="width:34px;"><input type="checkbox" onclick="document.querySelectorAll('.rowsel').forEach(c=>c.checked=this.checked)"></th>
+        <th class="num">Start</th><th>Verein / Gruppe</th><th>Disziplin</th><th>Wettkampf</th><th>Status</th><th class="no-sort"></th>
+      </tr></thead>
+      <tbody>
+      {% for t in treffer %}
+        <tr>
+          <td><input class="rowsel" type="checkbox" name="sel" value="{{ t.id }}"></td>
+          <td class="num mono">{{ t.startnr }}</td>
+          <td><strong>{{ t.verein_name or '—' }}</strong>{% if t.verein_zusatz %} {{ t.verein_zusatz }}{% endif %}{% if t.gruppennr %} <span class="pill">Gr. {{ t.gruppennr }}</span>{% endif %}</td>
+          <td>{{ t.kat_name }}</td>
+          <td class="muted">{{ t.wk_name.split('–')[-1].strip() if t.wk_name }}</td>
+          <td>{% if t.status %}<span class="pill">{{ status_labels.get(t.status, t.status) }}</span>{% else %}<span class="muted">gewertet</span>{% endif %}</td>
+          <td class="right">
+            <a class="btn sm" href="{{ url_for('teilnehmer_form', tid=t.id) }}">Bearbeiten</a>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="savebar" style="gap:16px;flex-wrap:wrap;">
+    <span class="muted">Ausgewählte:</span>
+    <button class="btn danger" type="submit" name="sammel_aktion" value="loeschen"
+            onclick="return confirm('Ausgewählte Anmeldungen wirklich abmelden (löschen)?')">Abmelden (löschen)</button>
+    <span style="display:inline-flex;gap:6px;align-items:center;">
+      <select name="status" style="width:150px">
+        <option value="">— gewertet —</option>
+        {% for key,label in status_labels.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+      </select>
+      <button class="btn" type="submit" name="sammel_aktion" value="status">Status setzen</button>
+    </span>
+  </div>
+</form>
+{% else %}
+  <div class="card"><p class="muted">Gib einen Vereinsnamen (z. B. „Ossingen") oder eine Startnummer ein.</p></div>
+{% endif %}
+{% endblock %}

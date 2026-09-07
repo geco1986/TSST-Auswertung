@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Rangliste – {{ wettkampf['name'] if wettkampf }}</title>
+  <style>
+    :root { --line:#c9ccd2; --muted:#555; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+           color:#111; margin:0; padding:24px; font-size:12px; }
+    .kopf { display:flex; justify-content:space-between; align-items:baseline;
+            border-bottom:2px solid #111; padding-bottom:6px; margin-bottom:14px; }
+    .kopf h1 { font-size:18px; margin:0; }
+    .kopf .meta { color:var(--muted); }
+    .toolbar { margin-bottom:16px; }
+    .btn { display:inline-block; padding:8px 16px; border:1px solid var(--line); border-radius:8px;
+           background:#fff; cursor:pointer; font:inherit; text-decoration:none; color:#111; }
+    .btn.primary { background:#14243b; color:#fff; border-color:#14243b; }
+    .disz { margin-bottom:22px; break-inside:avoid; }
+    .disz h2 { font-size:14px; margin:0 0 2px; }
+    .disz .sub { color:var(--muted); margin:0 0 6px; }
+    table { border-collapse:collapse; width:100%; }
+    th, td { padding:3px 8px; text-align:left; border-bottom:1px solid var(--line);
+             font-variant-numeric:tabular-nums; }
+    th { border-bottom:1px solid #111; font-size:11px; color:var(--muted); }
+    td.num, th.num { text-align:right; }
+    td.rang { width:34px; font-weight:700; }
+    td.mark { width:34px; letter-spacing:1px; }
+    .vermerke { margin-top:8px; color:#333; }
+    .vermerke td { border-bottom:1px dotted var(--line); }
+    .kopf-fix { text-align:center; font-weight:bold; font-size:15px; border-bottom:2px solid #111; padding-bottom:6px; margin:0 0 12px; }
+    .status { font-size:11px; color:#333; margin:0 0 6px; }
+    .status span { display:inline-block; padding:1px 7px; border:1px solid #bbb; border-radius:10px; margin-right:4px; }
+    .status span.ok { background:#e5f4ea; border-color:#1a6e3d; color:#1a6e3d; font-weight:bold; }
+    @page { size:A4; margin: 14mm; }
+    @media print {
+      .toolbar { display:none; }
+      .disz { break-inside:avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button class="btn primary" onclick="window.print()">Drucken / als PDF speichern</button>
+    <a class="btn" href="javascript:history.back()">Zurück</a>
+  </div>
+
+  <div class="kopf-fix">{{ anlass_titel }}<br>
+    <span style="font-weight:normal;font-size:12px;">Rangliste{% if wettkampf %} · {{ wettkampf['name'].split('–')[-1].strip() }}{% endif %}</span>
+  </div>
+
+  {% for b in bloecke %}
+    {% set kat = b.kat %}{% set d = b.daten %}
+    {% set einzelwerte = d.anzahl_werte and d.anzahl_werte > 1 %}
+    {% set score_kopf = 'Schnitt' if d.berechnung == 'durchschnitt' else ('Zeit' if d.anzahl_werte == 1 else 'Total') %}
+    <div class="disz">
+      <h2>{{ kat.bezeichnung }}</h2>
+      {% set s = b.status %}
+      {% if s %}<div class="status">Status:
+        <span class="{{ 'ok' if s.eingegeben }}">Alles eingegeben</span>
+        <span class="{{ 'ok' if s.kontrolliert }}">Eingabe kontrolliert</span>
+        <span class="{{ 'ok' if s.gedruckt }}">Gedruckt</span>
+        <span class="{{ 'ok' if s.fertig }}">Fertig (WKL)</span>
+      </div>{% endif %}
+      <p class="sub">
+        Total {{ d.anz_gewertet }} {{ 'Gruppen' }}
+        {% if d.berechnung == 'durchschnitt' %}· Durchschnitt aus {{ d.anzahl_werte }}{% if d.einheit %} ({{ d.einheit }}){% endif %}
+        {% elif d.anzahl_werte == 1 %}· Zeit{% if d.einheit %} ({{ d.einheit }}){% endif %}{% endif %}
+        · {{ 'tiefer = besser' if d.richtung == 'tief' else 'höher = besser' }}
+        {% if kat.kranz_modus == 'rang' %}· Auszeichnung bis Rang {{ kat.kranz_wert|round(0)|int }}{% else %}· Auszeichnung beste {{ kat.kranz_wert|round(0)|int }} %{% endif %}
+      </p>
+      <table>
+        <thead><tr>
+          <th class="num">Rang</th>
+          <th>Verein</th>
+          {% if d.hat_final %}<th>Final</th><th class="num">Vorlauf</th><th class="num">Finalzeit</th>{% endif %}
+          {% if einzelwerte %}{% for p in d.positionen %}<th class="num">{{ p }}.</th>{% endfor %}{% endif %}
+          <th class="num">{{ score_kopf }}{% if d.einheit %} ({{ d.einheit }}){% endif %}</th>
+          <th class="mark"></th>
+        </tr></thead>
+        <tbody>
+        {% for e in d.eintraege %}
+          {% if e.total is not none %}
+          <tr>
+            <td class="rang num">{{ e.rang }}.</td>
+            <td>{{ e.anzeige }}{% if e.verband %} <span style="color:#888">{{ e.verband }}</span>{% endif %}</td>
+            {% if d.hat_final %}<td style="color:#555">{{ e.runde }}</td><td class="num">{{ fmt_zeit(e.vorlauf) }}</td><td class="num">{{ fmt_zeit(e.final) }}</td>{% endif %}
+            {% if einzelwerte %}{% for n in e.noten %}<td class="num">{{ '%.2f'|format(n) if n is not none else '' }}</td>{% endfor %}{% endif %}
+            <td class="num"><strong>{{ fmt_zeit(e.total) if d.einheit=='s' else '%.2f'|format(e.total) }}</strong></td>
+            <td class="mark">{{ e.marker }}</td>
+          </tr>
+          {% endif %}
+        {% endfor %}
+        </tbody>
+      </table>
+      {% if d.sonder %}
+        <table class="vermerke">
+          <tbody>
+          {% for e in d.sonder %}
+            <tr>
+              <td style="width:34px;"></td><td style="width:34px;"></td>
+              <td class="num" style="width:70px;">{{ (fmt_zeit(e.total) if d.einheit=='s' else '%.2f'|format(e.total)) if e.total is not none else '' }}</td>
+              <td>{{ e.anzeige }}</td>
+              <td style="text-align:right; color:#555;">{{ e.status_kurz }}{% if e.bemerkung %} · {{ e.bemerkung }}{% endif %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+  {% endfor %}
+
+  <script>
+    // Direkt Druckdialog anbieten, wenn nur eine Disziplin gedruckt wird
+  </script>
+</body>
+</html>

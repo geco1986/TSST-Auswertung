@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Rangliste {{ kat.bezeichnung }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ kat.bezeichnung }}</h1>
+    <p class="sub">Rangliste ·
+      {% if daten.berechnung == 'durchschnitt' %}Durchschnitt aller {{ daten.anzahl_werte }} Leistungen{% if daten.einheit %} ({{ daten.einheit }}){% endif %}
+      {% elif daten.anzahl_werte == 1 %}Teamzeit{% if daten.einheit %} ({{ daten.einheit }}){% endif %}
+      {% else %}Summe{% if kat.streich %}, {{ kat.streich }} Streichresultat(e){% endif %}{% endif %} ·
+      {% if daten.richtung == 'tief' %}tiefer = besser{% else %}höher = besser{% endif %} ·
+      {% if kat.kranz_modus=='prozent' %}Auszeichnung: beste {{ kat.kranz_wert|round(0)|int }} %
+      {% elif kat.kranz_modus=='schwelle' %}Auszeichnung ab {{ '%.2f'|format(kat.kranz_wert) }}
+      {% else %}ohne Auszeichnung{% endif %}</p></div>
+  <div class="spacer"></div>
+  {% if daten.modus == 'stafette' %}<a class="btn" href="{{ url_for('stafette_verwalten', kid=kat.id) }}">Erfassen</a>
+  {% else %}<a class="btn" href="{{ url_for('erfassung', kid=kat.id) }}">Erfassen</a>{% endif %}
+  <a class="btn" href="{{ url_for('rangliste_druck', kid=kat.id) }}" target="_blank">Drucken / PDF</a>
+  <a class="btn" href="{{ url_for('rangliste_korrigieren', kid=kat.id) }}">Korrigieren</a>
+  <a class="btn" href="{{ url_for('export_rangliste_csv', kid=kat.id) }}">CSV exportieren</a>
+</div>
+
+{% if rl_status %}
+<div class="card" style="margin-bottom:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+  <strong style="font-size:13px;">Status:</strong>
+  {% macro sbadge(ok, txt) %}<span class="pill" style="{{ 'background:#e5f4ea;color:#1a6e3d;font-weight:bold' if ok else 'opacity:.6' }}">{{ '✓ ' if ok }}{{ txt }}</span>{% endmacro %}
+  {{ sbadge(rl_status.eingegeben, 'Alles eingegeben') }}
+  {{ sbadge(rl_status.kontrolliert, 'Eingabe kontrolliert') }}
+  {{ sbadge(rl_status.gedruckt, 'Gedruckt') }}
+  {{ sbadge(rl_status.fertig, 'Fertig (WKL)') }}
+  <div class="spacer"></div>
+  <form method="post" action="{{ url_for('rangliste_status', kid=kat.id) }}" style="display:inline">
+    <input type="hidden" name="feld" value="gedruckt"><button class="btn sm" type="submit">Als gedruckt markieren</button></form>
+  <form method="post" action="{{ url_for('rangliste_status', kid=kat.id) }}" style="display:inline">
+    <input type="hidden" name="feld" value="fertig"><button class="btn sm {{ 'primary' if not rl_status.fertig }}" type="submit">{{ 'WKL-Freigabe zurücknehmen' if rl_status.fertig else 'Fertig (WKL) freigeben' }}</button></form>
+</div>
+{% endif %}
+
+{% if daten.modus == 'stafette' %}
+  {% if not daten.eintraege %}
+    <div class="card empty"><p>Noch keine Zeiten erfasst.</p></div>
+  {% else %}
+  <div class="table-wrap">
+    <table class="sortable">
+      <thead><tr><th class="num">Rang</th><th>Gruppe</th><th>Verein</th>
+        {% if daten.hat_final %}<th>Final</th><th class="num">Vorlauf</th><th class="num">Finalzeit</th>{% endif %}
+        <th class="num">{{ 'Wertung' if daten.hat_final else 'Zeit' }}</th><th class="no-sort"></th></tr></thead>
+      <tbody>
+      {% for e in daten.eintraege %}
+        <tr class="{{ 'rang-1' if e.rang==1 }}{{ ' rang-2' if e.rang==2 }}{{ ' rang-3' if e.rang==3 }}">
+          <td class="num" data-sort="{{ e.rang if e.rang else 99999 }}">{% if e.rang %}<span class="rangnr">{{ e.rang }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+          <td><strong>{{ e.anzeige }}</strong></td>
+          <td>{{ e.verein }}</td>
+          {% if daten.hat_final %}
+            <td>{% if e.runde=='A-Final' %}<span class="pill" style="background:#e5f4ea;color:#1a6e3d">A-Final</span>{% elif e.runde=='B-Final' %}<span class="pill">B-Final</span>{% elif e.runde=='Final' %}<span class="pill" style="background:#e5f4ea;color:#1a6e3d">Final</span>{% else %}<span class="muted">Vorlauf</span>{% endif %}</td>
+            <td class="num mono" data-sort="{{ e.vorlauf if e.vorlauf is not none else 999999 }}">{{ fmt_zeit(e.vorlauf) }}</td>
+            <td class="num mono" data-sort="{{ e.final if e.final is not none else 999999 }}">{{ fmt_zeit(e.final) }}</td>
+          {% endif %}
+          <td class="num total" data-sort="{{ e.total if e.total is not none else 999999 }}">{{ fmt_zeit(e.total) }}</td>
+          <td>{% if e.marker %}<span class="kranz">{{ e.marker }}</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if daten.sonder %}
+    <h2 style="font-size:16px; margin:22px 0 8px;">Vermerke (nicht gewertet)</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Gruppe</th><th class="num">Zeit</th><th>Vermerk</th></tr></thead>
+      <tbody>
+      {% for e in daten.sonder %}
+        <tr><td><strong>{{ e.anzeige }}</strong></td>
+          <td class="num total">{{ fmt_zeit(e.total) }}</td>
+          <td><span class="pill">{{ e.status_label }}</span>{% if e.bemerkung %} <span class="muted">{{ e.bemerkung }}</span>{% endif %}</td></tr>
+      {% endfor %}
+      </tbody></table></div>
+  {% endif %}
+
+{% elif daten.modus == 'einzel' %}
+  {% set eintraege = daten.eintraege %}
+  {% set einzelwerte = daten.anzahl_werte and daten.anzahl_werte > 1 %}
+  {% set score_kopf = 'Schnitt' if daten.berechnung == 'durchschnitt' else ('Zeit' if daten.anzahl_werte == 1 else 'Total') %}
+  {% if not eintraege %}
+    <div class="card empty"><p>Noch keine Resultate in dieser Disziplin erfasst.</p></div>
+  {% else %}
+  <div class="table-wrap">
+    <table class="sortable">
+      <thead><tr>
+        <th class="num">Rang</th><th>Verein</th>
+        {% if einzelwerte %}{% for p in daten.positionen %}<th class="num">{{ p }}</th>{% endfor %}{% endif %}
+        <th class="num">{{ score_kopf }}{% if daten.einheit %} <span class="muted">({{ daten.einheit }})</span>{% endif %}</th><th class="no-sort">Ausz.</th>
+      </tr></thead>
+      <tbody>
+      {% for e in eintraege %}
+        <tr class="{{ 'rang-1' if e.rang==1 }}{{ ' rang-2' if e.rang==2 }}{{ ' rang-3' if e.rang==3 }}">
+          <td class="num" data-sort="{{ e.rang if e.rang else 99999 }}">{% if e.rang %}<span class="rangnr">{{ e.rang }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+          <td><strong>{{ e.anzeige }}</strong></td>
+          {% if einzelwerte %}
+            {% for n in e.noten %}
+              {% set pos = daten.positionen[loop.index0] %}
+              <td class="num note {{ 'gestrichen' if loop.index0 in e.gestrichen }}" data-sort="{{ n if n is not none else -1 }}">{% if pos in e.dnsdnf %}<span class="muted">{{ e.dnsdnf[pos]|upper }}</span>{% else %}{{ '%.2f'|format(n) if n is not none else '' }}{% endif %}</td>
+            {% endfor %}
+          {% endif %}
+          <td class="num total" data-sort="{{ e.total if e.total is not none else -1 }}">{{ '%.2f'|format(e.total) if e.total is not none else '–' }}</td>
+          <td>{% if e.marker %}<span class="kranz" title="Auszeichnung">{{ e.marker }}</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if daten.sonder %}
+    <h2 style="font-size:16px; margin:22px 0 8px;">Vermerke (nicht gewertet)</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Gruppe</th><th>Verein</th><th class="num">Ergebnis</th><th>Vermerk</th></tr></thead>
+        <tbody>
+        {% for e in daten.sonder %}
+          <tr>
+            <td><strong>{{ e.anzeige }}</strong></td>
+            <td>{{ e.verein }}</td>
+            <td class="num total">{{ '%.2f'|format(e.total) if e.total is not none else '–' }}</td>
+            <td><span class="pill">{{ e.status_label }}</span>{% if e.dnsdnf %} <span class="muted">(DNS/DNF)</span>{% endif %}{% if e.bemerkung %} <span class="muted">{{ e.bemerkung }}</span>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+  {% endif %}
+
+{% else %}
+  {# Sektions-/Gruppenrangliste #}
+  {% set eintraege = daten.eintraege %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th class="num">Rang</th><th>Verein / Sektion</th><th class="num">Mitglieder</th><th class="num">Total</th><th></th></tr></thead>
+      <tbody>
+      {% for e in eintraege %}
+        <tr class="{{ 'rang-1' if e.rang==1 }}{{ ' rang-2' if e.rang==2 }}{{ ' rang-3' if e.rang==3 }}">
+          <td class="num">{% if e.rang %}<span class="rangnr">{{ e.rang }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+          <td><strong>{{ e.verein }}</strong></td>
+          <td class="num mono">{{ e.mitglieder }}</td>
+          <td class="num total">{{ '%.2f'|format(e.total) if e.total is not none else '–' }}</td>
+          <td>{% if e.auszeichnung %}<span class="kranz">✦ Auszeichnung</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted" style="margin-top:12px;">Sektionstotal = Summe der Einzel-Totale aller Mitglieder des Vereins in dieser Kategorie.</p>
+{% endif %}
+{% endblock %}

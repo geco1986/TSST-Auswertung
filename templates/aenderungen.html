@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Änderungs-Log{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Änderungs-Log</h1><p class="sub">Protokoll aller Eingaben und Korrekturen</p></div>
+  <div class="spacer"></div>
+  <form method="get"><select name="kennung" onchange="this.form.submit()" style="width:180px">
+    <option value="">alle Kennungen</option>
+    {% for k in kennungen %}<option value="{{ k }}" {{ 'selected' if k==kennung }}>{{ k }}</option>{% endfor %}
+  </select></form>
+</div>
+<div class="table-wrap">
+  <table class="sortable">
+    <thead><tr><th>Zeit</th><th>Kennung</th><th>Aktion</th><th>Disziplin</th><th class="num">Start</th><th>Feld</th><th>alt → neu</th></tr></thead>
+    <tbody>
+    {% for e in eintraege %}
+      <tr>
+        <td class="mono" style="font-size:12px;">{{ e.zeit }}</td>
+        <td>{{ e.kennung }}</td>
+        <td>{{ e.aktion }}</td>
+        <td>{{ e.kat_name or '' }}</td>
+        <td class="num mono">{{ e.startnr or '' }}</td>
+        <td>{{ e.feld or '' }}</td>
+        <td class="mono" style="font-size:12px;">{{ e.alt or '–' }} → <strong>{{ e.neu or '–' }}</strong></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="muted">Noch keine Änderungen protokolliert.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

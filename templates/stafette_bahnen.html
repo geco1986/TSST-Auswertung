@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Bahnen {{ kat.bezeichnung }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Bahnen &amp; Serien – {{ kat.bezeichnung }}</h1>
+    <p class="sub">{{ bahnen }} Bahnen je Serie · Runde:
+      {% if kat.hat_final %}
+        <a href="{{ url_for('stafette_bahnen', kid=kat.id, runde='vorlauf') }}">{{ '➤ ' if runde=='vorlauf' }}Vorlauf</a> ·
+        <a href="{{ url_for('stafette_bahnen', kid=kat.id, runde='final') }}">{{ '➤ ' if runde=='final' }}Final</a>
+      {% else %}Endlauf{% endif %}
+    </p></div>
+  <div class="spacer"></div>
+  <form method="post" action="{{ url_for('stafette_bahnen_auto', kid=kat.id) }}" style="display:inline">
+    <input type="hidden" name="runde" value="{{ runde }}">
+    <button class="btn" type="submit">Automatisch zuteilen</button></form>
+  <a class="btn" href="{{ url_for('stafette_bahnen_druck', kid=kat.id, runde=runde) }}" target="_blank">Serienplan drucken</a>
+</div>
+
+{% if runde=='final' and kat.hat_final %}
+  <p class="muted">Final-Bahnen werden nach Vorlaufzeit gesetzt (schnellste in die Mitte). {{ 'A-Final = Serie 1, B-Final = Serie 2.' if kat.final_typ=='ab' else 'Final = Serie 1.' }}</p>
+{% endif %}
+
+<form method="post">
+  <div class="table-wrap">
+    <table class="sortable">
+      <thead><tr><th class="num">Start</th><th>Gruppe</th><th class="num">Vorlaufzeit</th>{% if kat.hat_final %}<th class="no-sort">Final</th>{% endif %}<th class="no-sort num">Serie</th><th class="no-sort num">Bahn</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+        {% set t = r.t %}
+        <tr>
+          <td class="num mono">{{ t.startnr }}</td>
+          <td><strong>{{ t.verein_name or '—' }}</strong>{% if t.verein_zusatz %} {{ t.verein_zusatz }}{% endif %}{% if t.gruppennr %} ({{ t.gruppennr }}){% endif %}</td>
+          <td class="num total">{{ fmt_zeit(r.vz) }}</td>
+          {% if kat.hat_final %}<td>{{ r.final_gruppe or '' }}</td>{% endif %}
+          <td class="num"><input type="number" min="1" name="serie_{{ t.id }}" style="width:56px" value="{{ r.serie or '' }}"></td>
+          <td class="num"><input type="number" min="1" max="{{ bahnen }}" name="bahn_{{ t.id }}" style="width:56px" value="{{ r.bahn or '' }}"></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="savebar"><button class="btn primary" type="submit">Bahnen speichern</button></div>
+</form>
+{% endblock %}

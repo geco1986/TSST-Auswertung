@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Kategorie{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <h1>{{ 'Kategorie bearbeiten' if kat else 'Neue Kategorie' }}</h1>
+  <p class="sub">Wertungsregeln bestimmen, wie Total, Rang und Auszeichnung berechnet werden</p>
+</div></div>
+
+<form method="post" class="stack">
+  <div class="grid-2">
+    <div><label>Bezeichnung</label>
+      <input type="text" name="bezeichnung" value="{{ kat.bezeichnung if kat }}" required></div>
+    <div><label>Abkürzung</label>
+      <input type="text" name="abk" value="{{ kat.abk if kat }}"></div>
+  </div>
+
+  <div class="grid-2">
+    <div><label>Typ</label>
+      <select name="typ">
+        {% for key, label in typen.items() %}
+          <option value="{{ key }}" {{ 'selected' if kat and kat.typ==key }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <p class="muted" style="font-size:13px;margin:6px 0 0;">Einzel = Rangliste je Person · Sektion/Gruppe = je Verein (Summe der Mitglieder).</p>
+    </div>
+    <div><label>Geschlecht</label>
+      <select name="geschlecht">
+        {% for key,label in {'alle':'alle','m':'Turner (m)','w':'Turnerin (w)'}.items() %}
+          <option value="{{ key }}" {{ 'selected' if kat and kat.geschlecht==key }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div>
+    <label>Disziplinen <span class="hint">(Reihenfolge = Note 1, 2, 3 …)</span></label>
+    {% if disziplinen %}
+    <div class="checks">
+      {% for d in disziplinen %}
+        <label><input type="checkbox" name="disziplinen" value="{{ d.id }}"
+          {{ 'checked' if d.id in zugeordnet }}> {{ d.abk }} · {{ d.bezeichnung }}</label>
+      {% endfor %}
+    </div>
+    {% else %}
+      <p class="muted">Noch keine Disziplinen. <a href="{{ url_for('disziplinen') }}">Zuerst Disziplinen anlegen →</a></p>
+    {% endif %}
+  </div>
+
+  <hr class="soft">
+
+  <div class="grid-2">
+    <div><label>Bewertung</label>
+      <select name="berechnung">
+        {% for key,label in {'summe':'Summe der Werte','durchschnitt':'Durchschnitt der Werte'}.items() %}
+          <option value="{{ key }}" {{ 'selected' if kat and kat.berechnung==key }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <p class="muted" style="font-size:13px;margin:6px 0 0;">WKB Turner/Turnerinnen: Durchschnitt aller Leistungen.</p>
+    </div>
+    <div><label>Wertungsrichtung</label>
+      <select name="richtung">
+        {% for key,label in {'hoch':'höher ist besser (Weite/Höhe/Punkte)','tief':'tiefer ist besser (Zeit)'}.items() %}
+          <option value="{{ key }}" {{ 'selected' if kat and kat.richtung==key }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div><label>Anzahl Werte / Mitglieder <span class="hint">(0 = aus Disziplinen)</span></label>
+      <input type="number" name="anzahl_werte" min="0" max="20" value="{{ kat.anzahl_werte if kat else 0 }}">
+      <p class="muted" style="font-size:13px;margin:6px 0 0;">Turner 5, Turnerinnen 4, Stafette 1.</p>
+    </div>
+    <div><label>Einheit <span class="hint">(m, s, …)</span></label>
+      <input type="text" name="einheit" value="{{ kat.einheit if kat else '' }}" placeholder="m">
+    </div>
+  </div>
+
+  <hr class="soft">
+
+  <div class="grid-2">
+    <div><label>Streichresultate <span class="hint">(nur bei Summe)</span></label>
+      <input type="number" name="streich" min="0" max="10" value="{{ kat.streich if kat else 0 }}"></div>
+    <div><label>Auszeichnung / Kranz</label>
+      <select name="kranz_modus" id="kranz_modus" onchange="toggleKranz()">
+        {% for key,label in modi.items() %}
+          <option value="{{ key }}" {{ 'selected' if kat and kat.kranz_modus==key }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div id="kranz_wert_wrap">
+    <label id="kranz_wert_label">Wert</label>
+    <input type="number" step="0.01" name="kranz_wert" value="{{ '%.2f'|format(kat.kranz_wert) if kat else '33.00' }}">
+    <p class="muted" style="font-size:13px;margin:6px 0 0;" id="kranz_hint"></p>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn primary" type="submit">Speichern</button>
+    <a class="btn ghost" href="{{ url_for('kategorien') }}">Abbrechen</a>
+  </div>
+</form>
+
+<script>
+function toggleKranz(){
+  const m = document.getElementById('kranz_modus').value;
+  const wrap = document.getElementById('kranz_wert_wrap');
+  const label = document.getElementById('kranz_wert_label');
+  const hint = document.getElementById('kranz_hint');
+  if(m === 'keiner'){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  if(m === 'prozent'){ label.textContent='Anteil in %'; hint.textContent='Die besten X % der Kategorie erhalten eine Auszeichnung.'; }
+  else if(m === 'rang'){ label.textContent='Bis Rang'; hint.textContent='Alle bis und mit diesem Rang erhalten eine Auszeichnung.'; }
+  else { label.textContent='Total-Schwelle'; hint.textContent='Alle ab diesem Total erhalten eine Auszeichnung.'; }
+}
+toggleKranz();
+</script>
+{% endblock %}
