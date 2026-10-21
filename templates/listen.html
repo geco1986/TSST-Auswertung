@@ -1,15 +1,49 @@
 {% extends "base.html" %}
+{% from "_druck.html" import druckknoepfe %}
 {% block title %}Listen{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Listen &amp; Statistik</h1><p class="sub">Druckbare Start- und Anmeldelisten</p></div></div>
-<div class="tiles">
-  <a class="tile" href="{{ url_for('startliste_druck', nach='verein') }}" target="_blank">
-    <div class="ic">⬢</div><h3>Startliste nach Verein</h3><p>je Verein: Startnr, Disziplin, Gruppe</p></a>
-  <a class="tile" href="{{ url_for('startliste_druck', nach='kategorie') }}" target="_blank">
-    <div class="ic">▥</div><h3>Startliste nach Disziplin</h3><p>je Disziplin: Startnr, Verein, Gruppe</p></a>
-  <a class="tile" href="{{ url_for('startliste_druck', nach='startnr') }}" target="_blank">
-    <div class="ic">#</div><h3>Startliste nach Startnummer</h3><p>fortlaufend: Startnr, Verein, Disziplin</p></a>
-  <a class="tile" href="{{ url_for('statistik_druck') }}" target="_blank">
-    <div class="ic">∑</div><h3>Statistik Anmeldungen</h3><p>je Disziplin: Einsätze &amp; Teilnehmer</p></a>
+<div class="page-head"><div><h1>Listen &amp; Statistik</h1>
+  <p class="sub">Alle druckbaren Listen des gewählten Anlasses – Vorschau, PDF im modernen Layout oder Excel</p></div></div>
+
+<div class="grid-2" style="align-items:start;">
+  <div class="card">
+    <h3 style="margin-top:0;">Startlisten</h3>
+    <div class="druck-zeile"><div class="was"><strong>Startliste nach Verein</strong><small>je Verein eine Seite: Start-Nr., Disziplin, Gruppe</small></div>
+      {{ druckknoepfe('startliste', {'nach': 'verein'}, klein=True) }}</div>
+    <div class="druck-zeile"><div class="was"><strong>Startliste nach Disziplin</strong><small>je Disziplin eine Seite: Start-Nr., Verein, Gruppe</small></div>
+      {{ druckknoepfe('startliste', {'nach': 'kategorie'}, klein=True) }}</div>
+    <div class="druck-zeile"><div class="was"><strong>Startliste nach Startnummer</strong><small>fortlaufend: Start-Nr., Verein, Disziplin</small></div>
+      {{ druckknoepfe('startliste', {'nach': 'startnr'}, klein=True) }}</div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Statistik &amp; Auswertung</h3>
+    <div class="druck-zeile"><div class="was"><strong>Statistik Anmeldungen</strong><small>je Disziplin: Anmeldungen, Abmeldungen, Teilnehmende, Auszeichnungen 30/33/40 %</small></div>
+      {{ druckknoepfe('statistik', klein=True) }}</div>
+    <div class="druck-zeile"><div class="was"><strong>Kranzliste</strong><small>ausgezeichnete Gruppen für die Rangverkündigung</small></div>
+      {{ druckknoepfe('kranzliste', klein=True) }}</div>
+    <div class="druck-zeile"><div class="was"><strong>Top-Leistungen</strong><small>beste Leistung je Disziplin – für den Speaker</small></div>
+      {{ druckknoepfe('top-leistungen', klein=True) }}</div>
+    <div class="druck-zeile"><div class="was"><strong>Vereinsblatt (alle Vereine)</strong><small>Resultate je Verein nach Disziplin und Kategorie</small></div>
+      {{ druckknoepfe('vereinsblatt', klein=True) }}</div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Ranglisten</h3>
+    <div class="druck-zeile"><div class="was"><strong>Gesamt-Rangliste</strong><small>jede Disziplin auf neuer Seite</small></div>
+      {{ druckknoepfe('rangliste', klein=True) }}</div>
+    <div class="druck-zeile"><div class="was"><strong>Gesamt-Rangliste fortlaufend</strong><small>Disziplinen direkt anschliessend</small></div>
+      {{ druckknoepfe('rangliste', {'umbruch': 'fortlaufend'}, klein=True, excel=False) }}</div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Einsatzplan (Vormittag)</h3>
+    <div class="druck-zeile"><div class="was"><strong>nach Anlage</strong><small>Zeit, Start-Nr., Verein/Gruppe, Disziplin</small></div>
+      {{ druckknoepfe('einsatzplan', {'nach': 'anlage'}, klein=True) }}</div>
+    <div class="druck-zeile"><div class="was"><strong>nach Verein</strong><small>je Verein eine Seite: Zeit, Disziplin, Anlage</small></div>
+      {{ druckknoepfe('einsatzplan', {'nach': 'verein'}, klein=True) }}</div>
+    <p class="muted" style="font-size:13px;margin:8px 0 0;">Notenblätter und Serienpläne je Disziplin unter
+      <a href="{{ url_for('notenblaetter') }}">Notenblätter/Startlisten</a>.</p>
+  </div>
 </div>
 {% endblock %}

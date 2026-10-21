@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_druck.html" import druckknoepfe %}
 {% block title %}Bahnen {{ kat.bezeichnung }}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -13,7 +14,7 @@
   <form method="post" action="{{ url_for('stafette_bahnen_auto', kid=kat.id) }}" style="display:inline">
     <input type="hidden" name="runde" value="{{ runde }}">
     <button class="btn" type="submit">Automatisch zuteilen</button></form>
-  <a class="btn" href="{{ url_for('stafette_bahnen_druck', kid=kat.id, runde=runde) }}" target="_blank">Serienplan drucken</a>
+  {{ druckknoepfe('serienplan', {'kid': kat.id, 'runde': runde}) }}
 </div>
 
 {% if runde=='final' and kat.hat_final %}

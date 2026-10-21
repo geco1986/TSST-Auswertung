@@ -1,7 +1,11 @@
 {% extends "base.html" %}
+{% from "_druck.html" import druckknoepfe %}
 {% block title %}Top-Leistungen{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Top-Leistungen</h1><p class="sub">Aktuell beste Leistung je Disziplin – für den Speaker</p></div></div>
+<div class="page-head"><div><h1>Top-Leistungen</h1><p class="sub">Aktuell beste Leistung je Disziplin – für den Speaker</p></div>
+  <div class="spacer"></div>
+  {{ druckknoepfe('top-leistungen') }}
+</div>
 {% for b in bloecke %}
   <h2 style="font-size:17px; margin:18px 0 8px;">{{ b.wk.name }}</h2>
   <div class="table-wrap">

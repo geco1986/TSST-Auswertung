@@ -13,6 +13,7 @@ Die exakten Sonderformeln der Original-Wettkampftypen (&H12 … &H60) lassen sic
 bei Bedarf feinjustieren.
 """
 
+from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 from math import ceil
 
 # Statusvermerke pro Start (nicht gewertet). Kurzform fürs Drucken in Klammern.
@@ -22,9 +23,26 @@ STATUS_LABELS = {
     "unfall": "Unfall",
     "nges": "Nicht gestartet (n.Ges.)",
     "aufg": "Aufgegeben (Aufg.)",
+    "abgem": "Abgemeldet",
 }
 STATUS_KURZ = {"disq": "Disq", "ak": "a.K.", "unfall": "Unfall",
-               "nges": "n.Ges.", "aufg": "Aufg."}
+               "nges": "n.Ges.", "aufg": "Aufg.", "abgem": "abgem."}
+
+# Abgemeldete Gruppen erscheinen in keiner Rangliste, zählen aber (wie in DEBRA)
+# zur Basis der Auszeichnungen, weil die Preise nach Meldeschluss bestellt werden.
+NICHT_GELISTET = ("abgem",)
+
+
+def durchschnitt(werte, richtung="hoch"):
+    """Durchschnitt mit DEBRA-Rundung auf Hundertstel: Zeiten auf-, Weiten/Höhen abrunden.
+
+    Verifiziert an den offiziellen Resultaten TSST 2026 (z. B. 100m 12.902 -> 12.91,
+    Weitsprung 3.3775 -> 3.37). Dezimal gerechnet, damit Float-Fehler
+    (12.48 als 12.4799…) nicht falsch runden.
+    """
+    summe = sum(Decimal(repr(float(w))) for w in werte)
+    modus = ROUND_CEILING if richtung == "tief" else ROUND_FLOOR
+    return float((summe / len(werte)).quantize(Decimal("0.01"), rounding=modus))
 
 
 def gruppen_score(werte, berechnung="summe", streich=0, richtung="hoch"):
@@ -43,7 +61,7 @@ def gruppen_score(werte, berechnung="summe", streich=0, richtung="hoch"):
     best = max(vals) if richtung == "hoch" else min(vals)
     gestrichen = set()
     if berechnung == "durchschnitt":
-        score = sum(vals) / anzahl
+        return durchschnitt(vals, richtung), anzahl, gestrichen, best
     else:
         if streich > 0 and anzahl > streich:
             # schlechteste `streich` Werte streichen (kleinster Wert = schlechteste)
@@ -62,8 +80,10 @@ def teilnehmer_total(noten, streich=0):
 def _rang_zuweisen(eintraege, richtung="hoch"):
     """Rangierung nach Score; Richtung 'tief' = kleinerer Score ist besser.
 
-    Gleichstand-Tiebreak: bessere Einzelleistung ('best'). Nur wenn Score UND
-    beste Einzelleistung gleich sind, teilen sich zwei Einträge den Rang.
+    Gleichstand-Tiebreak wie DEBRA (an den Resultaten 2026 geprüft): die
+    Einzelleistungen der Reihe nach vergleichen – beste, dann zweitbeste, …
+    ('folge'; ohne Folge nur die beste Einzelleistung 'best'). Nur bei identischer
+    Folge teilen sich zwei Einträge den Rang.
     Einträge ohne Resultat (total is None) landen ohne Rang am Ende.
     """
     mit = [e for e in eintraege if e.get("total") is not None]
@@ -71,10 +91,13 @@ def _rang_zuweisen(eintraege, richtung="hoch"):
 
     def sortkey(e):
         s = e["total"]
-        b = e.get("best")
+        folge = e.get("folge")
+        if folge is None:
+            b = e.get("best")
+            folge = [b] if b is not None else []
         if richtung == "tief":
-            return (s, b if b is not None else float("inf"))
-        return (-s, -(b if b is not None else float("-inf")))
+            return (s,) + tuple(sorted(folge))
+        return (-s,) + tuple(-v for v in sorted(folge, reverse=True))
 
     mit.sort(key=lambda e: sortkey(e) + (e.get("anzeige", ""),))
 
@@ -93,12 +116,21 @@ def _rang_zuweisen(eintraege, richtung="hoch"):
     return mit + ohne
 
 
-def _kranz_grenze(anz_rangiert, kategorie):
-    """Anzahl auszuzeichnender Ränge: Prozent-Anteil oder fester Rang."""
+def _kranz_grenze(anz_rangiert, kategorie, anz_angemeldet=None):
+    """Anzahl auszuzeichnender Ränge: Prozent-Anteil oder fester Rang.
+
+    Prozent-Basis je Kategorie (kranz_basis): 'angemeldet' = Anmeldungen bei
+    Meldeschluss (anz_meldeschluss aus dem Excel-Import), sonst alle Anmeldungen inkl.
+    Abmeldungen und Vermerke – DEBRA-Praxis, an den Resultaten 2026 geprüft, weil die
+    Preise nach Meldeschluss bestellt werden. 'rangiert' = nur rangierte Gruppen.
+    """
     modus = _kf(kategorie, "kranz_modus", "prozent")
     wert = kategorie["kranz_wert"] or 0
     if modus == "prozent":
-        return int(ceil(anz_rangiert * wert / 100.0))
+        basis = anz_rangiert
+        if _kf(kategorie, "kranz_basis", "angemeldet") == "angemeldet":
+            basis = _kf(kategorie, "anz_meldeschluss") or anz_angemeldet or anz_rangiert
+        return int(ceil(round(basis * wert / 100.0, 6)))
     if modus == "rang":
         return int(wert)
     return None
@@ -198,6 +230,7 @@ def rangliste_einzel(conn, kategorie):
             "dnsdnf": dnsdnf,
             "gestrichen": gestrichen,
             "best": best,
+            "folge": [n for i, n in enumerate(noten) if n is not None and i not in gestrichen],
             "status": status,
             "status_kurz": STATUS_KURZ.get(status, ""),
             "status_label": STATUS_LABELS.get(status, ""),
@@ -211,7 +244,7 @@ def rangliste_einzel(conn, kategorie):
         })
 
     # Einträge mit Vermerk (Disq, a.K., …) werden nicht gewertet, sondern separat gezeigt
-    sonder = [e for e in eintraege if e["status"]]
+    sonder = [e for e in eintraege if e["status"] and e["status"] not in NICHT_GELISTET]
     gewertet = [e for e in eintraege if not e["status"]]
     for e in sonder:
         e["rang"] = None
@@ -222,7 +255,7 @@ def rangliste_einzel(conn, kategorie):
     gewertet = _apply_rang_manuell(gewertet)
 
     rangiert = [e for e in gewertet if e["rang"] is not None]
-    grenze = _kranz_grenze(len(rangiert), kategorie)
+    grenze = _kranz_grenze(len(rangiert), kategorie, len(eintraege))
     for e in gewertet:
         e["auszeichnung"] = False
         e["marker"] = ""
@@ -240,7 +273,8 @@ def rangliste_einzel(conn, kategorie):
             e["marker"] = "***" if e["rang"] <= 3 else "*"
 
     return {"positionen": positionen, "disziplinen": kat_diszs, "eintraege": gewertet,
-            "sonder": sonder, "anz_gewertet": len(rangiert),
+            "sonder": sonder, "anz_gewertet": len(rangiert), "anz_angemeldet": len(eintraege),
+            "anz_ausz": grenze,
             "berechnung": berechnung, "richtung": richtung, "einheit": einheit,
             "anzahl_werte": anzahl_werte}
 
@@ -326,6 +360,7 @@ def _stafette_basis(conn, kategorie):
         status = (t["status"] if "status" in t.keys() else None) or ""
         eintraege.append({
             "teilnehmer_id": t["id"], "startnr": t["startnr"], "anzeige": anzeige,
+            "vorname": t["vorname"] or "", "nachname": t["nachname"] or "", "gruppennr": t["gruppennr"],
             "verein": verein, "verband": (t["verband"] if "verband" in t.keys() else "") or "",
             "vorlauf": vz, "final": fz,
             "final_gruppe": (t["final_gruppe"] if "final_gruppe" in t.keys() else None),
@@ -345,7 +380,7 @@ def rangliste_stafette(conn, kategorie):
     einheit = _kf(kategorie, "einheit", "s")
     inf = float("inf")
     alle = _stafette_basis(conn, kategorie)
-    sonder = [e for e in alle if e["status"]]
+    sonder = [e for e in alle if e["status"] and e["status"] not in NICHT_GELISTET]
     gewertet = [e for e in alle if not e["status"]]
     for e in sonder:
         e["rang"] = None
@@ -361,37 +396,29 @@ def rangliste_stafette(conn, kategorie):
         def by_vorlauf(e):
             return e["vorlauf"] if e["vorlauf"] is not None else inf
 
-        ordered = []
+        def block(liste, start, feld, runde):
+            """Rangiert einen Lauf ab Rang `start`; gleiche Zeit = gleicher Rang."""
+            letzte, rang = None, start
+            for pos, e in enumerate(liste, start=start):
+                e["total"] = e[feld]; e["runde"] = runde
+                if e[feld] is None:
+                    e["rang"] = None
+                    continue
+                if e[feld] != letzte:
+                    rang, letzte = pos, e[feld]
+                e["rang"] = rang
+            return liste
+
         if final_typ == "ab":
             gA = sorted([e for e in gewertet if e["final_gruppe"] == "A"], key=by_final)
             gB = sorted([e for e in gewertet if e["final_gruppe"] == "B"], key=by_final)
             rest = sorted([e for e in gewertet if e["final_gruppe"] not in ("A", "B")], key=by_vorlauf)
-            r = 1
-            for e in gA:
-                e["rang"] = r; e["total"] = e["final"]; e["runde"] = "A-Final"; r += 1; ordered.append(e)
-            r = 9
-            for e in gB:
-                e["rang"] = r; e["total"] = e["final"]; e["runde"] = "B-Final"; r += 1; ordered.append(e)
-            r = 17
-            for e in rest:
-                e["total"] = e["vorlauf"]; e["runde"] = "Vorlauf"
-                e["rang"] = r if e["vorlauf"] is not None else None
-                if e["vorlauf"] is not None:
-                    r += 1
-                ordered.append(e)
+            ordered = (block(gA, 1, "final", "A-Final") + block(gB, 9, "final", "B-Final")
+                       + block(rest, 17, "vorlauf", "Vorlauf"))
         else:  # einzel: ein Final der besten 8
             gF = sorted([e for e in gewertet if e["final_gruppe"] in ("F", "A")], key=by_final)
             rest = sorted([e for e in gewertet if e["final_gruppe"] not in ("F", "A")], key=by_vorlauf)
-            r = 1
-            for e in gF:
-                e["rang"] = r; e["total"] = e["final"]; e["runde"] = "Final"; r += 1; ordered.append(e)
-            r = len(gF) + 1
-            for e in rest:
-                e["total"] = e["vorlauf"]; e["runde"] = "Vorlauf"
-                e["rang"] = r if e["vorlauf"] is not None else None
-                if e["vorlauf"] is not None:
-                    r += 1
-                ordered.append(e)
+            ordered = block(gF, 1, "final", "Final") + block(rest, len(gF) + 1, "vorlauf", "Vorlauf")
         gewertet = ordered
     else:
         # einfacher Endlauf: nach Finalzeit (bzw. einziger Zeit) rangieren
@@ -402,7 +429,7 @@ def rangliste_stafette(conn, kategorie):
 
     gewertet = _apply_rang_manuell(gewertet)
     rangiert = [e for e in gewertet if e["rang"] is not None]
-    grenze = _kranz_grenze(len(rangiert), kategorie)
+    grenze = _kranz_grenze(len(rangiert), kategorie, len(alle))
     for e in gewertet:
         e.setdefault("marker", "")
         e["auszeichnung"] = bool(grenze and e["rang"] and e["rang"] <= grenze)
@@ -410,6 +437,7 @@ def rangliste_stafette(conn, kategorie):
             e["marker"] = "***" if e["rang"] <= 3 else "*"
 
     return {"eintraege": gewertet, "sonder": sonder, "anz_gewertet": len(rangiert),
+            "anz_angemeldet": len(alle), "anz_ausz": grenze,
             "hat_final": hat_final, "final_typ": final_typ, "einheit": einheit,
             "berechnung": "zeit", "richtung": "tief", "anzahl_werte": 1, "positionen": [],
             "disziplinen": []}

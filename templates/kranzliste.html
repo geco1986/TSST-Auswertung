@@ -1,9 +1,10 @@
 {% extends "base.html" %}
+{% from "_druck.html" import druckknoepfe %}
 {% block title %}Kranzliste{% endblock %}
 {% block content %}
 <div class="page-head"><div><h1>Kranzliste</h1><p class="sub">Ausgezeichnete Gruppen für die Rangverkündigung</p></div>
   <div class="spacer"></div>
-  <a class="btn" href="{{ url_for('kranzliste', druck=1) }}" target="_blank">Drucken</a>
+  {{ druckknoepfe('kranzliste') }}
 </div>
 {% if not bloecke %}<div class="card empty"><p>Noch keine Auszeichnungen – es sind noch keine Resultate erfasst.</p></div>{% endif %}
 {% for b in bloecke %}
@@ -30,5 +31,4 @@
     </div>
   {% endfor %}
 {% endfor %}
-{% if druck %}<script>window.print()</script>{% endif %}
 {% endblock %}

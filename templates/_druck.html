@@ -1,0 +1,16 @@
+{# Druck-Knöpfe für jede druckbare Liste: Vorschau (Fenster), PDF (Download), Excel (Download).
+   name = Liste aus debra/listen.py, args = Parameter (z. B. {'nach': 'verein'}) #}
+{% macro druckknoepfe(name, args={}, excel=True, klein=False, pdf=True) -%}
+<span class="druck-knoepfe">
+  {%- if pdf %}
+  <button type="button" class="btn {{ 'sm' if klein }}" title="Vorschau anzeigen"
+          data-vorschau="{{ url_for('liste_ausgabe', name=name, fmt='pdf', **args) }}">👁 Vorschau</button>
+  <a class="btn {{ 'sm' if klein }} primary" title="PDF herunterladen"
+     href="{{ url_for('liste_ausgabe', name=name, fmt='pdf', download=1, **args) }}">PDF</a>
+  {%- endif %}
+  {%- if excel %}
+  <a class="btn {{ 'sm' if klein }}" title="Excel-Datei (.xlsx) herunterladen"
+     href="{{ url_for('liste_ausgabe', name=name, fmt='xlsx', **args) }}">Excel</a>
+  {%- endif %}
+</span>
+{%- endmacro %}

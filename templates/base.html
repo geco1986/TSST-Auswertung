@@ -75,7 +75,21 @@
         <div class="wk muted">Kein Wettkampf aktiv</div>
       {% endif %}
       <div class="spacer"></div>
-      <div class="user">Auswertung TSST · v{{ "1.0" }}</div>
+      <div class="anlass-wahl" role="group" aria-label="Aktiver Anlass">
+        {% for art, label in ANLAESSE.items() %}
+          {% set w = anlaesse.get(art) %}
+          {% set aktiv = w and aktueller_wettkampf and w['id'] == aktueller_wettkampf['id'] %}
+          {% if ist_chef and not aktiv %}
+            <form method="post" action="{{ url_for('anlass_wechseln', art=art) }}">
+              <input type="hidden" name="zurueck" value="{{ request.path }}">
+              <button type="submit" title="{{ w['name'] if w else label ~ ' noch nicht angelegt' }}"
+                      {{ 'class=leer' if not w }}>{{ label }}</button>
+            </form>
+          {% else %}
+            <span class="{{ 'aktiv' if aktiv else 'aus' }}" title="{{ w['name'] if w else '' }}">{{ label }}</span>
+          {% endif %}
+        {% endfor %}
+      </div>
     </div>
 
     <div class="content">
@@ -93,7 +107,38 @@
 {% else %}
   {% block loggedout %}{% endblock %}
 {% endif %}
+<div id="vorschau" class="vorschau" hidden>
+  <div class="vorschau-kopf">
+    <strong id="vorschau-titel">Vorschau</strong>
+    <span class="spacer"></span>
+    <a class="btn sm primary" id="vorschau-pdf" href="#">PDF herunterladen</a>
+    <a class="btn sm" id="vorschau-tab" href="#" target="_blank">In neuem Tab öffnen</a>
+    <button type="button" class="btn sm" onclick="vorschauZu()">✕ Schliessen</button>
+  </div>
+  <iframe id="vorschau-rahmen" title="Vorschau"></iframe>
+</div>
 <script>
+// Vorschau-Fenster für PDFs (Knöpfe mit data-vorschau="URL")
+document.addEventListener('click', function(ev){
+  var b = ev.target.closest('[data-vorschau]'); if(!b) return;
+  ev.preventDefault();
+  var url = b.getAttribute('data-vorschau');
+  document.getElementById('vorschau-rahmen').src = url;
+  document.getElementById('vorschau-tab').href = url;
+  document.getElementById('vorschau-pdf').href = url + (url.indexOf('?') < 0 ? '?' : '&') + 'download=1';
+  var titel = b.closest('tr, .druck-zeile, .card, .page-head');
+  var t = titel && titel.querySelector('h1, h3, strong');
+  document.getElementById('vorschau-titel').textContent = 'Vorschau' + (t ? ' – ' + t.textContent.trim() : '');
+  document.getElementById('vorschau').hidden = false;
+  document.body.style.overflow = 'hidden';
+});
+function vorschauZu(){
+  document.getElementById('vorschau').hidden = true;
+  document.getElementById('vorschau-rahmen').src = 'about:blank';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(ev){ if(ev.key === 'Escape') vorschauZu(); });
+
 // Sortierbare Listen: Klick auf Spaltenkopf sortiert auf-/absteigend.
 document.querySelectorAll('table.sortable').forEach(function(tbl){
   var ths = tbl.tHead ? tbl.tHead.rows[0].cells : [];

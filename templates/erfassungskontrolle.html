@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_druck.html" import druckknoepfe %}
 {% block title %}Erfassungskontrolle{% endblock %}
 {% block content %}
 <div class="page-head"><div><h1>Erfassungskontrolle</h1><p class="sub">Wo fehlen noch Resultate?</p></div></div>
@@ -24,8 +25,9 @@
             {% if ist_chef and z.vollstaendig and not z.abgeschlossen %}
               <form method="post" action="{{ url_for('disziplin_abschliessen', kid=z.kat.id) }}" style="display:inline">
                 <button class="btn sm" type="submit">Abschliessen</button></form>
-            {% elif z.abgeschlossen %}
-              <a class="btn sm" href="{{ url_for('disziplin_fertig', kid=z.kat.id) }}" target="_blank">Fertig-Blatt</a>
+            {% elif z.abgeschlossen and ist_chef %}
+              <span class="muted" style="font-size:12px;">Fertig-Blatt</span>
+              {{ druckknoepfe('abschluss', {'kid': z.kat.id}, klein=True, excel=False) }}
             {% endif %}
             {% if ist_chef %}<a class="btn sm" href="{{ url_for('rangliste', kid=z.kat.id) }}">Rangliste</a>{% endif %}
           </td>

@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% from "_druck.html" import druckknoepfe %}
+{% block title %}Gesamt-Rangliste{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Gesamt-Rangliste</h1>
+    <p class="sub">Alle Disziplinen in einem PDF im Design der Rangliste 2026 – Reihenfolge, Auswahl und Zusatzblätter</p></div>
+  <div class="spacer"></div>
+  <a class="btn" href="{{ url_for('rangliste_index') }}">← Ranglisten</a>
+</div>
+<div class="card" style="margin-bottom:16px;">
+  <div class="druck-zeile"><div class="was"><strong>Je Disziplin neue Seite</strong><small>jede Disziplin beginnt oben auf einer Seite</small></div>
+    {{ druckknoepfe('rangliste') }}</div>
+  <div class="druck-zeile"><div class="was"><strong>Fortlaufend</strong><small>Disziplinen direkt anschliessend; an Stellen mit Zusatzblatt beginnt trotzdem eine neue Seite</small></div>
+    {{ druckknoepfe('rangliste', {'umbruch': 'fortlaufend'}, excel=False) }}</div>
+</div>
+
+<div class="grid-2" style="align-items:start;">
+  <div class="card">
+    <h3 style="margin-top:0;">Reihenfolge &amp; Auswahl</h3>
+    <p class="muted" style="font-size:13px;margin:0 0 10px;">Mit ▲▼ verschieben, ganze Sparten mit den Pfeilen in der Spartenzeile.
+      Die Reihenfolge gilt <strong>überall in der App</strong>; das Häkchen bestimmt, was in die Gesamt-Rangliste kommt.</p>
+    <form method="post" id="ordnung-form">
+      <input type="hidden" name="aktion" value="reihenfolge">
+      <input type="hidden" name="ordnung" id="ordnung">
+      <div class="table-wrap" style="border:none;">
+        <table id="ordnung-tabelle">
+          <thead><tr><th class="no-sort" style="width:70px;"></th><th>Drucken</th><th>Disziplin</th><th class="num">Gruppen</th><th></th></tr></thead>
+          {% set ns = namespace(sparte=None) %}
+          {% for k in kategorien %}
+            {% if k.sparte != ns.sparte %}
+              {% if not loop.first %}</tbody>{% endif %}
+              <tbody class="sparte-block" data-sparte="{{ k.sparte }}">
+              <tr class="sparte-kopf"><th colspan="5" style="background:var(--paper);">
+                <button type="button" class="btn sm" onclick="blockSchieben(this,-1)" title="Sparte nach oben">▲</button>
+                <button type="button" class="btn sm" onclick="blockSchieben(this,1)" title="Sparte nach unten">▼</button>
+                &nbsp;{{ k.sparte or '–' }}</th></tr>
+              {% set ns.sparte = k.sparte %}
+            {% endif %}
+            <tr data-id="{{ k.id }}">
+              <td style="white-space:nowrap;">
+                <button type="button" class="btn sm" onclick="zeileSchieben(this,-1)" title="nach oben">▲</button>
+                <button type="button" class="btn sm" onclick="zeileSchieben(this,1)" title="nach unten">▼</button></td>
+              <td><input type="checkbox" name="drucken" value="{{ k.id }}" {{ 'checked' if k.rl_drucken }}></td>
+              <td>{{ titel_von(k) }}</td>
+              <td class="num">{{ k.n }}</td>
+              <td class="right"><a class="btn sm" href="{{ url_for('rangliste_pdf', kid=k.id) }}" target="_blank">PDF</a></td>
+            </tr>
+            {% if loop.last %}</tbody>{% endif %}
+          {% endfor %}
+        </table>
+      </div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn primary" type="submit">Reihenfolge &amp; Auswahl speichern</button>
+      </div>
+    </form>
+    <form method="post" style="margin-top:8px;" onsubmit="return confirm('Reihenfolge auf die Rangliste 2026 zurücksetzen?')">
+      <input type="hidden" name="aktion" value="standard">
+      <button class="btn sm" type="submit">Standard-Reihenfolge (wie Rangliste 2026)</button>
+    </form>
+  </div>
+
+  <div>
+    <div class="card" style="margin-bottom:16px;">
+      <h3 style="margin-top:0;">Gestaltung</h3>
+      <form method="post" class="stack" style="max-width:none;">
+        <input type="hidden" name="aktion" value="kopf">
+        <div class="btn-row">
+          <label class="checks" style="display:inline-flex;"><input type="radio" name="design" value="modern" {{ 'checked' if opt.design != 'klassisch' }}>
+            Modern <span class="muted" style="font-weight:400;">&nbsp;– Podest-Medaillen, Auszeichnungsgrenze, Seitenzahlen</span></label>
+          <label class="checks" style="display:inline-flex;"><input type="radio" name="design" value="klassisch" {{ 'checked' if opt.design == 'klassisch' }}>
+            Klassisch <span class="muted" style="font-weight:400;">&nbsp;– wie Rangliste 2026</span></label>
+        </div>
+        <label>Text links oben (rechts steht das Datum des Anlasses)</label>
+        <input type="text" name="kopfzeile" value="{{ opt.kopfzeile }}">
+        <label class="checks" style="display:inline-flex;"><input type="checkbox" name="einzelwerte" value="1" {{ 'checked' if opt.einzelwerte }}>
+          Einzelresultate unter dem Vereinsnamen (1. Tu/Ti, 2. Tu/Ti …)</label>
+        <button class="btn" type="submit">Speichern</button>
+      </form>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <h3 style="margin-top:0;">Zusatzblatt einfügen (PDF)</h3>
+      <p class="muted" style="font-size:13px;margin:0 0 8px;">Deckblatt, Sponsoren, Fundbüro, Werbung … – mehrseitige PDFs werden komplett eingefügt.</p>
+      <form method="post" enctype="multipart/form-data" class="stack" style="max-width:none;">
+        <input type="hidden" name="aktion" value="hochladen">
+        <input type="file" name="datei" accept="application/pdf,.pdf" required>
+        <input type="text" name="titel" placeholder="Titel (z. B. Deckblatt, Sponsoren)">
+        <label>Einfügen</label>
+        <select name="position">
+          {% for wert, text in positionen %}<option value="{{ wert }}">{{ text }}</option>{% endfor %}
+        </select>
+        <button class="btn primary" type="submit">Hochladen &amp; einfügen</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% if blaetter %}
+<div class="card" style="margin-top:16px;">
+  <h3 style="margin-top:0;">Zusatzblätter</h3>
+  <form method="post">
+    <input type="hidden" name="aktion" value="blaetter">
+    <div class="table-wrap" style="border:none;">
+      <table>
+        <thead><tr><th>Aktiv</th><th>Titel</th><th class="num">Seiten</th><th>Position</th><th class="num" title="Reihenfolge mehrerer Blätter an derselben Stelle">Nr.</th><th></th></tr></thead>
+        <tbody>
+        {% for b in blaetter %}
+          <tr>
+            <td><input type="checkbox" name="aktiv_{{ b.id }}" value="1" {{ 'checked' if b.aktiv }}></td>
+            <td><input type="text" name="titel_{{ b.id }}" value="{{ b.titel }}" style="min-width:160px;"></td>
+            <td class="num">{{ b.seiten }}</td>
+            <td><select name="pos_{{ b.id }}">
+              {% for wert, text in positionen %}<option value="{{ wert }}" {{ 'selected' if wert == b.position }}>{{ text }}</option>{% endfor %}
+            </select></td>
+            <td class="num"><input type="number" name="sort_{{ b.id }}" value="{{ b.sortierung }}" style="width:64px;"></td>
+            <td class="right btn-row" style="justify-content:flex-end;">
+              <a class="btn sm" href="{{ url_for('zusatzblatt_pdf', zid=b.id) }}" target="_blank">Ansehen</a>
+              <button class="btn sm danger" type="submit" form="loeschen-{{ b.id }}">Entfernen</button>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="btn-row" style="margin-top:10px;"><button class="btn primary" type="submit">Zusatzblätter speichern</button></div>
+  </form>
+  {% for b in blaetter %}
+    <form id="loeschen-{{ b.id }}" method="post" onsubmit="return confirm('Zusatzblatt „{{ b.titel }}“ entfernen?')">
+      <input type="hidden" name="aktion" value="loeschen"><input type="hidden" name="zid" value="{{ b.id }}"></form>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card" style="margin-top:16px;">
+  <h3 style="margin-top:0;">Ablauf der Gesamt-Rangliste</h3>
+  <ol style="margin:0;padding-left:22px;columns:2;column-gap:32px;">
+    {% for art, text in ablauf %}
+      {% if art == 'sparte' %}<li style="list-style:none;margin:8px 0 2px -22px;"><strong>{{ text }}</strong></li>
+      {% elif art == 'blatt' %}<li><span class="pill" style="background:var(--gold-bg);">Zusatzblatt</span> {{ text }}</li>
+      {% else %}<li>{{ text }}</li>{% endif %}
+    {% endfor %}
+  </ol>
+</div>
+
+<script>
+function zeileSchieben(btn, richtung){
+  var tr = btn.closest('tr');
+  var ziel = richtung < 0 ? tr.previousElementSibling : tr.nextElementSibling;
+  if (!ziel || ziel.classList.contains('sparte-kopf')) return;   // innerhalb der Sparte bleiben
+  if (richtung < 0) tr.parentNode.insertBefore(tr, ziel); else tr.parentNode.insertBefore(ziel, tr);
+}
+function blockSchieben(btn, richtung){
+  var block = btn.closest('tbody');
+  var ziel = richtung < 0 ? block.previousElementSibling : block.nextElementSibling;
+  if (!ziel || ziel.tagName !== 'TBODY') return;
+  if (richtung < 0) block.parentNode.insertBefore(block, ziel); else block.parentNode.insertBefore(ziel, block);
+}
+document.getElementById('ordnung-form').addEventListener('submit', function(){
+  var ids = Array.prototype.map.call(document.querySelectorAll('#ordnung-tabelle tr[data-id]'),
+                                     function(tr){ return tr.getAttribute('data-id'); });
+  document.getElementById('ordnung').value = ids.join(',');
+});
+</script>
+{% endblock %}

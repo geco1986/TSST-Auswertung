@@ -1,9 +1,16 @@
 {% extends "base.html" %}
+{% from "_druck.html" import druckknoepfe %}
 {% block title %}Ranglisten{% endblock %}
 {% block content %}
 <div class="page-head"><div><h1>Ranglisten</h1><p class="sub">Auswertung je Kategorie</p></div>
   <div class="spacer"></div>
-  <a class="btn" href="{{ url_for('rangliste_druck_alle') }}" target="_blank">Gesamtrangliste drucken</a>
+  <a class="btn" href="{{ url_for('rangliste_gesamt') }}">Reihenfolge &amp; Zusatzblätter</a>
+</div>
+<div class="card" style="margin-bottom:16px;">
+  <div class="druck-zeile"><div class="was"><strong>Gesamt-Rangliste</strong><small>jede Disziplin auf neuer Seite</small></div>
+    {{ druckknoepfe('rangliste') }}</div>
+  <div class="druck-zeile"><div class="was"><strong>Gesamt-Rangliste fortlaufend</strong><small>Disziplinen direkt anschliessend – spart Papier</small></div>
+    {{ druckknoepfe('rangliste', {'umbruch': 'fortlaufend'}, excel=False) }}</div>
 </div>
 {% if kategorien %}
 <div class="tiles">

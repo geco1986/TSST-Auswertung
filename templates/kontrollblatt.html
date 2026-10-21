@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_druck.html" import druckknoepfe %}
 {% block title %}Kontrollblatt{% endblock %}
 {% block content %}
 <div class="page-head no-print">
@@ -21,7 +22,8 @@
   </label>
   <label class="checks" style="display:inline-flex;align-items:center;gap:6px;">
     <input type="checkbox" name="offen" value="1" {{ 'checked' if nur_offen }} onchange="this.form.submit()"> nur nicht kontrollierte</label>
-  <button class="btn" type="button" onclick="druckenMitBackup()">Drucken &amp; Backup</button>
+  {{ druckknoepfe('kontrollblatt', {'kennung': gewaehlt, 'kat': kat_filter or '', 'offen': '1' if nur_offen else '0'}) }}
+  <button class="btn" type="button" onclick="backupLaden()" title="Lokale Sicherung der Datenbank herunterladen">Backup</button>
 </form>
 
 <div class="print-kopf" style="display:none;"><strong>Kontrollblatt</strong> — Kennung: {{ gewaehlt }} — {{ now if now }}</div>
@@ -67,11 +69,10 @@
 </form>
 
 <script>
-function druckenMitBackup(){
-  // löst zuerst einen lokalen Backup-Download aus, dann den Druck
+function backupLaden(){
+  // lokale Sicherung der Datenbank (Download)
   var f=document.createElement('iframe'); f.style.display='none';
   f.src="{{ url_for('kontrollblatt_backup') }}"; document.body.appendChild(f);
-  setTimeout(function(){ window.print(); }, 800);
 }
 </script>
 <style>

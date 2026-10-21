@@ -6,7 +6,7 @@ Datenbank optional Demo-Daten an und startet den WSGI-Server *waitress*.
 Konfiguration über Umgebungsvariablen:
   DEBRA_DB      Pfad zur SQLite-Datei (Default im Container: /data/debra.sqlite3)
   DEBRA_SECRET  Secret-Key für Sessions (unbedingt setzen)
-  DEBRA_SEED    "1" (Default) = bei leerer DB Demo-Daten laden, "0" = nicht
+  DEBRA_SEED    "1" = bei leerer DB Demo-Daten laden, "0" (Default) = nicht
   HOST / PORT   Bind-Adresse/Port (Default 0.0.0.0:5000)
 """
 import os
@@ -17,7 +17,7 @@ from debra.seed import seed
 
 
 def _seed_wenn_leer():
-    if os.environ.get("DEBRA_SEED", "1") != "1":
+    if os.environ.get("DEBRA_SEED", "0") != "1":
         return
     conn = get_db()
     leer = conn.execute("SELECT COUNT(*) c FROM wettkampf").fetchone()["c"] == 0

@@ -1,0 +1,13 @@
+# Laufzeitdaten (SQLite-DB, Backups, Session-Secret) – nie ins Repo
+data/
+*.sqlite3
+*.sqlite3.*.bak
+secret.txt
+
+# lokale Import-Quellen (Resultate mit Personendaten)
+Inputs/
+
+# Python
+.venv/
+__pycache__/
+*.pyc

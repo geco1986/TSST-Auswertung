@@ -70,6 +70,9 @@ CREATE TABLE IF NOT EXISTS kategorie (
     streich        INTEGER NOT NULL DEFAULT 0,
     kranz_modus    TEXT NOT NULL DEFAULT 'prozent',
     kranz_wert     REAL NOT NULL DEFAULT 33.0,
+    kranz_basis    TEXT NOT NULL DEFAULT 'angemeldet', -- Prozent von: angemeldet | rangiert
+    anz_meldeschluss INTEGER,                        -- Anmeldungen bei Meldeschluss (Excel-Import)
+    rl_drucken     INTEGER NOT NULL DEFAULT 1,        -- in der Gesamt-Rangliste (PDF) enthalten
     sortierung     INTEGER NOT NULL DEFAULT 0,
     sparte         TEXT,          -- z. B. Knaben, Mädchen, Turner (aus DEBRA-Import)
     kat_nr         INTEGER,       -- originale KategorieNr aus DEBRA
@@ -121,7 +124,7 @@ CREATE TABLE IF NOT EXISTS teilnehmer (
     gruppennr     INTEGER,
     kategorie_id  INTEGER REFERENCES kategorie(id) ON DELETE SET NULL,
     stationsnr    TEXT,
-    status        TEXT,    -- '' | disq | ak | unfall | nges | aufg (Vermerk)
+    status        TEXT,    -- '' | disq | ak | unfall | nges | aufg | abgem (Vermerk)
     bemerkung     TEXT,    -- freier Vermerk
     final_gruppe  TEXT,    -- Stafette: NULL | A | B | F (Selektion Final)
     anlage        TEXT,    -- Einsatzplan Vormittag: Anlage
@@ -201,6 +204,20 @@ CREATE TABLE IF NOT EXISTS zeitplan (
     sortierung    INTEGER NOT NULL DEFAULT 0
 );
 
+-- Zusatzblätter der Gesamt-Rangliste (Deckblatt, Sponsoren, Fundbüro, Werbung …) als PDF.
+-- position: anfang | ende | vor_sparte:<Sparte> | nach_sparte:<Sparte> | nach_kat:<kategorie_id>
+CREATE TABLE IF NOT EXISTS zusatzblatt (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    wettkampf_id  INTEGER NOT NULL REFERENCES wettkampf(id) ON DELETE CASCADE,
+    titel         TEXT NOT NULL,
+    dateiname     TEXT,
+    pdf           BLOB NOT NULL,
+    seiten        INTEGER NOT NULL DEFAULT 1,
+    position      TEXT NOT NULL DEFAULT 'ende',
+    sortierung    INTEGER NOT NULL DEFAULT 0,  -- Reihenfolge mehrerer Blätter an derselben Stelle
+    aktiv         INTEGER NOT NULL DEFAULT 1
+);
+
 -- Einstellungen (tabPCSettings) – Schlüssel/Wert.
 CREATE TABLE IF NOT EXISTS einstellung (
     schluessel  TEXT PRIMARY KEY,
@@ -245,6 +262,8 @@ def _migrate(conn):
             ("rl_fertig", "INTEGER NOT NULL DEFAULT 0"),
             ("rl_fertig_von", "TEXT"),
             ("sparte", "TEXT"), ("kat_nr", "INTEGER"), ("geschlecht", "TEXT"),
+            ("kranz_basis", "TEXT NOT NULL DEFAULT 'angemeldet'"), ("anz_meldeschluss", "INTEGER"),
+            ("rl_drucken", "INTEGER NOT NULL DEFAULT 1"),
         ],
         "teilnehmer": [
             ("status", "TEXT"), ("bemerkung", "TEXT"), ("final_gruppe", "TEXT"),

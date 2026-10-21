@@ -92,6 +92,34 @@ a:hover { text-decoration: underline; }
 .topbar .spacer { flex: 1; }
 .topbar .user { color: var(--muted); font-size: 14px; }
 
+/* Druck-Knöpfe (Vorschau | PDF | Excel) und Vorschau-Fenster */
+.druck-knoepfe { display: inline-flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.druck-zeile { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.druck-zeile:first-of-type { border-top: 0; }
+.druck-zeile .was { flex: 1; min-width: 220px; }
+.druck-zeile .was small { display: block; color: var(--muted); }
+.vorschau { position: fixed; inset: 0; z-index: 50; background: rgba(15, 23, 42, .72);
+  display: flex; flex-direction: column; padding: 18px; }
+.vorschau[hidden] { display: none; }
+.vorschau-kopf { display: flex; align-items: center; gap: 8px; background: #fff; padding: 10px 14px;
+  border-radius: 10px 10px 0 0; }
+.vorschau-kopf .spacer { flex: 1; }
+.vorschau iframe { flex: 1; width: 100%; border: 0; background: #525659; border-radius: 0 0 10px 10px; }
+
+/* Umschalter aktiver Anlass (TSST | JTSST) */
+.anlass-wahl { display: inline-flex; border: 1px solid var(--line); border-radius: 8px;
+  overflow: hidden; background: #fff; }
+.anlass-wahl form { margin: 0; display: flex; }
+.anlass-wahl button, .anlass-wahl span { font: inherit; font-size: 13px; font-weight: 700;
+  letter-spacing: .03em; padding: 7px 16px; border: 0; background: transparent; color: var(--muted); }
+.anlass-wahl > * + * { border-left: 1px solid var(--line); }
+.anlass-wahl button { cursor: pointer; }
+.anlass-wahl button:hover { background: var(--paper); color: var(--ink); }
+.anlass-wahl button.leer { font-weight: 400; font-style: italic; }
+.anlass-wahl .aktiv { background: var(--accent); color: #fff; }
+.anlass-wahl .aus { opacity: .5; }
+@media print { .anlass-wahl { display: none; } }
+
 .content { padding: 26px; max-width: 1180px; width: 100%; }
 
 .page-head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 20px; }

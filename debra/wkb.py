@@ -2,7 +2,10 @@
 auf die Wettkämpfe der Turner und Turnerinnen an.
 
 Grundlage: WKB ZTV-WTU, 06.09.2026, Sportpark Deutweg Winterthur.
-- 1.4 Auszeichnungen: pro Disziplin erhalten 30 % der rangierten Gruppen einen Preis.
+- 1.4 Auszeichnungen: pro Disziplin erhalten 30 % der Gruppen einen Preis. Basis ist
+      wie in DEBRA die Zahl der Anmeldungen (inkl. Abmeldungen), aufgerundet –
+      an den offiziellen Resultaten 2026 geprüft (z. B. 100m: 59 Anm. -> 18 Preise).
+- Durchschnitte: Zeiten auf-, Weiten/Höhen auf Hundertstel abgerundet (DEBRA).
 - 2.5 Bewertung: Turner = Durchschnitt aller 5 Leistungen,
                   Turnerinnen = Durchschnitt aller 4 Leistungen.
       Bei Gleichstand entscheidet das bessere Einzelresultat.
@@ -15,7 +18,7 @@ bleiben unverändert.
 
 from .db import get_db
 
-EVENT_NAME = "Turn-, Spiel- und Stafettentag WTU"
+EVENT_NAME = "Turn-, Spiel- und Stafettentag WTU 2026"
 EVENT_ORT = "Sportpark Deutweg, Winterthur"
 EVENT_DATUM = "2026-09-06"
 
@@ -26,7 +29,7 @@ _STAFETTE = ("stafette", "pendel", "schweden", "olymp", "4x100", "4x400", "4 x 1
 _LAUF = ("lauf", "80m", "100m")
 
 
-def _ist_stafette(bez):
+def ist_stafette(bez):
     b = bez.lower()
     return any(k in b for k in _STAFETTE)
 
@@ -43,29 +46,36 @@ def anwenden(conn=None):
     cur = conn.cursor()
     bericht = {"wettkaempfe": 0, "kategorien": 0}
 
-    wettkaempfe = cur.execute(
-        "SELECT DISTINCT w.id, k.sparte FROM wettkampf w "
-        "JOIN kategorie k ON k.wettkampf_id=w.id "
-        "WHERE k.sparte IN ('Turner','Turnerinnen')").fetchall()
+    wettkaempfe = [r["wettkampf_id"] for r in cur.execute(
+        "SELECT DISTINCT wettkampf_id FROM kategorie WHERE sparte IN ('Turner','Turnerinnen') "
+        "ORDER BY wettkampf_id")]
 
     if wettkaempfe:
+        # Turner und Turnerinnen bilden einen Anlass (TSST) – wie Knaben/Mädchen beim JTSST.
+        # Ein DEBRA-Backup liefert sie als zwei Wettkämpfe: hier zusammenführen.
+        tsst = wettkaempfe[0]
+        for alt in wettkaempfe[1:]:
+            for tabelle in ("kategorie", "teilnehmer", "zeitplan"):
+                cur.execute(f"UPDATE {tabelle} SET wettkampf_id=? WHERE wettkampf_id=?", (tsst, alt))
+            cur.execute("DELETE FROM wettkampf WHERE id=?", (alt,))
+        # Nach einem Import (zwei Wettkämpfe zusammengeführt): Reihenfolge wie Rangliste 2026.
+        # Eine selbst gewählte Reihenfolge bleibt bei erneutem "WKB anwenden" erhalten.
+        if len(wettkaempfe) > 1:
+            from .reihenfolge import standard
+            standard(conn, tsst)
         cur.execute("UPDATE wettkampf SET aktiv=0")  # eindeutigen aktiven Wettkampf sicherstellen
-
-    for w in wettkaempfe:
-        sparte = w["sparte"]
-        mitglieder = MITGLIEDER.get(sparte, 5)
-        # Anlass-Metadaten setzen (Turner-Wettkampf wird aktiviert)
-        cur.execute(
-            "UPDATE wettkampf SET name=?, ort=?, datum=?, aktiv=? WHERE id=?",
-            (f"{EVENT_NAME} – {sparte}", EVENT_ORT, EVENT_DATUM,
-             1 if sparte == "Turner" else 0, w["id"]))
-        bericht["wettkaempfe"] += 1
+        cur.execute("UPDATE wettkampf SET name=?, ort=?, datum=?, aktiv=1 WHERE id=?",
+                    (EVENT_NAME, EVENT_ORT, EVENT_DATUM, tsst))
+        bericht["wettkaempfe"] = 1
 
         kategorien = cur.execute(
-            "SELECT * FROM kategorie WHERE wettkampf_id=?", (w["id"],)).fetchall()
+            "SELECT * FROM kategorie WHERE wettkampf_id=? AND sparte IN ('Turner','Turnerinnen')",
+            (tsst,)).fetchall()
         for kat in kategorien:
+            sparte = kat["sparte"]
+            mitglieder = MITGLIEDER.get(sparte, 5)
             bez = kat["bezeichnung"]
-            if _ist_stafette(bez):
+            if ist_stafette(bez):
                 # Stafette: eine Teamzeit, Rangierung nach Zeit (tiefer = besser)
                 berechnung, anzahl, richtung, einheit = "summe", 1, "tief", "s"
                 ist_staf = 1
@@ -74,7 +84,7 @@ def anwenden(conn=None):
                 final_typ = ("ab" if sparte == "Turner" else "einzel") if hat_final else None
                 cur.execute(
                     "UPDATE kategorie SET typ='einzel', streich=0, kranz_modus='prozent', "
-                    "kranz_wert=?, berechnung=?, anzahl_werte=?, richtung=?, einheit=?, "
+                    "kranz_wert=?, kranz_basis='angemeldet', berechnung=?, anzahl_werte=?, richtung=?, einheit=?, "
                     "geschlecht=?, ist_stafette=1, hat_final=?, final_typ=?, "
                     "zuschlag_a=?, zuschlag_b=?, zuschlag_a_label=?, zuschlag_b_label=?, bahnen=8 "
                     "WHERE id=?",
@@ -96,7 +106,7 @@ def anwenden(conn=None):
 
             cur.execute(
                 "UPDATE kategorie SET typ='einzel', streich=0, "
-                "kranz_modus='prozent', kranz_wert=?, "
+                "kranz_modus='prozent', kranz_wert=?, kranz_basis='angemeldet', "
                 "berechnung=?, anzahl_werte=?, richtung=?, einheit=?, "
                 "geschlecht=?, ist_stafette=0, hat_final=0 WHERE id=?",
                 (KRANZ_PROZENT, berechnung, anzahl, richtung, einheit,
@@ -108,11 +118,13 @@ def anwenden(conn=None):
                 ("Zeit" if einheit == "s" else "Weite", kat["id"]))
             bericht["kategorien"] += 1
 
-    # Diese Software deckt nur Turner/Turnerinnen ab: übrige Wettkämpfe entfernen.
+    # Die Software kennt nur die beiden Anlässe TSST und JTSST: übrige Wettkämpfe entfernen.
     if wettkaempfe:
+        from .jtsst import EVENT_NAME as JTSST_NAME
         cur.execute(
-            "DELETE FROM wettkampf WHERE id NOT IN "
-            "(SELECT DISTINCT wettkampf_id FROM kategorie WHERE sparte IN ('Turner','Turnerinnen'))")
+            "DELETE FROM wettkampf WHERE name<>? AND id NOT IN "
+            "(SELECT DISTINCT wettkampf_id FROM kategorie WHERE sparte IN ('Turner','Turnerinnen'))",
+            (JTSST_NAME,))
         # verwaiste Disziplinen (keiner Turner/Turnerinnen-Kategorie zugeordnet) löschen
         cur.execute(
             "DELETE FROM disziplin WHERE id NOT IN "

@@ -1,43 +1,33 @@
 {% extends "base.html" %}
+{% from "_druck.html" import druckknoepfe %}
 {% block title %}Vereinsblatt{% endblock %}
 {% block content %}
-<div class="page-head no-print"><div><h1>Vereinsblatt</h1><p class="sub">Alle Resultate nach Verein – Vorlage für die Vereinsmitteilung</p></div>
+<div class="page-head"><div><h1>Vereinsblatt</h1>
+  <p class="sub">Alle Resultate eines Vereins – gegliedert nach Sparte, Disziplin und Kategorie, im Layout der modernen Rangliste</p></div>
   <div class="spacer"></div>
-  <button class="btn" type="button" onclick="window.print()">Drucken / als PDF speichern</button>
+  {% if vereine %}<span class="muted" style="margin-right:4px;">Alle Vereine:</span>{{ druckknoepfe('vereinsblatt') }}{% endif %}
 </div>
 
-{% if not daten %}
-  <div class="card empty"><p>Noch keine Resultate erfasst.</p></div>
+{% if not vereine %}
+  <div class="card empty"><p>Noch keine Gruppen in diesem Anlass.</p></div>
 {% else %}
-  {% for verein, eintraege in daten.items() %}
-    <div class="card vblatt" style="margin-bottom:18px;">
-      <h2 style="margin:0 0 10px; font-size:18px;">{{ verein }}</h2>
-      <div class="table-wrap" style="border:none;">
-        <table>
-          <thead><tr><th>Kategorie</th><th>Name</th><th class="num">JG</th><th class="num">Rang</th><th class="num">Total</th><th></th></tr></thead>
-          <tbody>
-          {% for e in eintraege %}
-            <tr>
-              <td>{{ e.kategorie }}</td>
-              <td><strong>{{ e.name }}</strong></td>
-              <td class="num mono">{{ e.jahrgang or '' }}</td>
-              <td class="num mono">{{ e.rang or '–' }}</td>
-              <td class="num total">{{ '%.2f'|format(e.total) if e.total is not none else '–' }}</td>
-              <td>{% if e.auszeichnung %}<span class="kranz">✦</span>{% endif %}</td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  {% endfor %}
+<div class="table-wrap">
+  <table class="sortable">
+    <thead><tr><th>Verein</th><th>Verband</th><th class="num">Gruppen</th>
+      <th class="num">Auszeichnungen</th><th class="num">Podest</th><th class="no-sort"></th></tr></thead>
+    <tbody>
+    {% for v in vereine %}
+      <tr>
+        <td><strong>{{ v.name }}</strong></td>
+        <td class="muted">{{ v.verband }}</td>
+        <td class="num">{{ v.gruppen }}</td>
+        <td class="num">{{ v.auszeichnungen or '' }}</td>
+        <td class="num">{{ v.podest or '' }}</td>
+        <td class="right">{{ druckknoepfe('vereinsblatt', {'verein': v.name}, klein=True) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% endif %}
-<style>
-@page { size: A4; }
-@media print {
-  .no-print, .sidebar, nav, .topbar { display:none !important; }
-  .vblatt { box-shadow:none; border:none; page-break-after:always; break-after:page; margin:0 !important; }
-  .vblatt:last-child { page-break-after:auto; break-after:auto; }
-}
-</style>
 {% endblock %}

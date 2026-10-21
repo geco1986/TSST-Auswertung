@@ -29,18 +29,24 @@
 
   <div class="card" style="margin-bottom:16px;">
     <h3 style="margin-top:0;">Auszeichnung pro Disziplin</h3>
-    <p class="muted" style="font-size:13px;margin:0 0 8px;">Modus <em>Beste X %</em> oder <em>Bis Rang X</em> je Disziplin. Der Wert bedeutet je nach Modus Prozent bzw. Rang.</p>
+    <p class="muted" style="font-size:13px;margin:0 0 8px;">Modus <em>Beste X %</em> oder <em>Bis Rang X</em> je Disziplin. Der Wert bedeutet je nach Modus Prozent bzw. Rang.
+      Prozent-Basis wie DEBRA: <em>Anmeldungen</em> = Stand bei Meldeschluss (aus dem Excel-Import, sonst alle Anmeldungen inkl. Abmeldungen), aufgerundet.</p>
     <div class="table-wrap" style="border:none;">
       <table>
-        <thead><tr><th>Disziplin</th><th>Modus</th><th>Wert</th></tr></thead>
+        <thead><tr><th>Disziplin</th><th>Modus</th><th>Wert</th><th>Basis</th><th>Meldeschluss</th></tr></thead>
         <tbody>
         {% for k in kategorien %}
           <tr>
-            <td><strong>{{ k.bezeichnung }}</strong> <span class="muted">{{ k.wk_name.split('–')[-1].strip() }}</span></td>
+            <td><strong>{{ k.bezeichnung }}</strong> <span class="muted">{{ k.sparte or '' }}</span></td>
             <td><select name="km_{{ k.id }}" style="width:150px">
               {% for key,label in modi.items() %}<option value="{{ key }}" {{ 'selected' if k.kranz_modus==key }}>{{ label }}</option>{% endfor %}
             </select></td>
             <td><input type="number" step="0.01" name="kw_{{ k.id }}" value="{{ '%g'|format(k.kranz_wert or 0) }}" style="width:90px"></td>
+            <td><select name="kb_{{ k.id }}" style="width:130px">
+              <option value="angemeldet" {{ 'selected' if k.kranz_basis != 'rangiert' }}>Anmeldungen</option>
+              <option value="rangiert" {{ 'selected' if k.kranz_basis == 'rangiert' }}>Rangierte</option>
+            </select></td>
+            <td><input type="number" min="0" name="ms_{{ k.id }}" value="{{ k.anz_meldeschluss if k.anz_meldeschluss is not none else '' }}" style="width:80px" title="leer = alle Anmeldungen zählen"></td>
           </tr>
         {% endfor %}
         </tbody>
@@ -57,7 +63,7 @@
         <tbody>
         {% for k in stafetten %}
           <tr>
-            <td><strong>{{ k.bezeichnung }}</strong> <span class="muted">{{ k.wk_name.split('–')[-1].strip() }}</span></td>
+            <td><strong>{{ k.bezeichnung }}</strong> <span class="muted">{{ k.sparte or '' }}</span></td>
             <td><input type="number" step="0.1" name="za_{{ k.id }}" value="{{ '%.1f'|format(k.zuschlag_a) }}" style="width:80px"></td>
             <td><input type="number" step="0.1" name="zb_{{ k.id }}" value="{{ '%.1f'|format(k.zuschlag_b) }}" style="width:80px"></td>
             <td><input type="number" name="bahnen_{{ k.id }}" value="{{ k.bahnen }}" style="width:70px"></td>
@@ -79,7 +85,7 @@
         <tbody>
         {% for k in kategorien %}
           <tr>
-            <td><strong>{{ k.bezeichnung }}</strong> <span class="muted">{{ k.wk_name.split('–')[-1].strip() }}</span></td>
+            <td><strong>{{ k.bezeichnung }}</strong> <span class="muted">{{ k.sparte or '' }}</span></td>
             <td><input type="number" min="1" name="anl_{{ k.id }}" value="{{ k.anlagen or 1 }}" style="width:70px"></td>
             <td><input type="number" step="0.1" name="zpt_{{ k.id }}" value="{{ '%g'|format(k.zeit_pro_turner or 0) }}" style="width:90px"></td>
             <td><input type="number" step="0.01" name="wmin_{{ k.id }}" value="{{ '%g'|format(k.warn_min) if k.warn_min is not none else '' }}" style="width:90px"></td>
@@ -107,6 +113,24 @@
     <h3>Wettkampfbestimmungen</h3>
     <p class="muted">Setzt für Turner/Turnerinnen die WKB-Wertung (Durchschnitt, 30% Auszeichnungen, Stafetten mit Final/Zuschlägen).</p>
     <form method="post" action="{{ url_for('wkb_anwenden') }}"><button class="btn" type="submit">WKB anwenden</button></form>
+    <hr class="soft">
+    <h3>Jugendwettkämpfe (JTSST 2026)</h3>
+    <p class="muted">Legt den Wettkampf gemäss WKB Jugendwettkämpfe 2026 (05.09.2026) an: Knaben/Mädchen Kat. A/B/C,
+      Seilziehen (Cup-Rang), Pendelstafette, Ballwurf, Hindernislauf, Seilspringen, Schwedenstafette (Kat. A); 30% Auszeichnungen.</p>
+    <form method="post" action="{{ url_for('jtsst_anlegen') }}"><button class="btn" type="submit">JTSST 2026 anlegen</button></form>
+    <p class="muted" style="margin-top:12px;">Anmeldungen importieren: Ordner mit der Gesamtübersicht
+      (<span class="mono">Anmeldungen JTSST …xlsx</span>) und den Exporten der alten Software
+      (<span class="mono">JR_TSST.xls</span>, <span class="mono">MR_TSST.xls</span>).
+      <strong>Ersetzt alle bestehenden JTSST-Gruppen.</strong></p>
+    <form method="post" action="{{ url_for('jtsst_import') }}" class="stack" style="max-width:none;"
+          onsubmit="return confirm('Alle JTSST-Gruppen ersetzen und Anmeldungen importieren?')">
+      <input type="text" name="ordner" placeholder="Inputs\JTSST (Ordner im Programmverzeichnis oder absoluter Pfad)">
+      <select name="quelle">
+        <option value="uebersicht">Gruppenzahlen aus Gesamtübersicht (empfohlen)</option>
+        <option value="alt">Gruppenzahlen aus Export der alten Software</option>
+      </select>
+      <button class="btn" type="submit">JTSST-Anmeldungen importieren</button>
+    </form>
   </div>
 
   <div class="card">
@@ -115,7 +139,7 @@
       Aktuell <strong>{{ vorjahr_n }}</strong> Stafetten-Resultate gespeichert.
       <a href="{{ url_for('vorjahr_ansicht') }}">Ansehen</a></p>
     <form method="post" action="{{ url_for('vorjahr_import') }}" class="stack" style="max-width:none;">
-      <input type="text" name="pdf_pfad" placeholder="Pfad zur Rangliste-PDF (optional – sonst beigelegte 2025er)">
+      <input type="text" name="pdf_pfad" placeholder="DEBRA-Backup-Ordner oder Rangliste-PDF (leer = Inputs\TSST\Backup-Final TSST)">
       <button class="btn" type="submit">Vorjahr importieren</button>
     </form>
   </div>
@@ -129,15 +153,13 @@
     <p class="muted" style="font-size:13px;">TU/TI-Blätter mit automatischer Spaltenzuordnung und Prüfschritt.</p>
     <a class="btn" href="{{ url_for('excel_import') }}">Excel importieren</a>
     <hr class="soft">
-    <h3>Backup importieren</h3>
+    <h3>DEBRA-Backup importieren (Turner/Turnerinnen)</h3>
+    <p class="muted" style="font-size:13px;">Übernimmt Anmeldungen, Abmeldungen und Resultate inkl. offizieller Ränge
+      und wendet die WKB an. Der Jugendwettkampf (JTSST) bleibt erhalten.</p>
     <form method="post" action="{{ url_for('backup_import') }}" class="stack" style="max-width:none;"
-          onsubmit="return confirm('Alle Daten ersetzen?')">
-      <input type="text" name="import_pfad" placeholder="/pfad/zum/Backup" required>
+          onsubmit="return confirm('Turner/Turnerinnen ersetzen?')">
+      <input type="text" name="import_pfad" placeholder="Inputs\TSST\Backup-Final TSST" required>
       <button class="btn" type="submit">Importieren</button>
-    </form>
-    <hr class="soft">
-    <form method="post" action="{{ url_for('demo_laden') }}" onsubmit="return confirm('Alle Daten löschen und Demo laden?')">
-      <button class="btn danger" type="submit">Demo-Daten laden</button>
     </form>
   </div>
 </div>

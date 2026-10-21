@@ -35,21 +35,23 @@
       <button class="btn" type="submit">WKB anwenden</button>
     </form>
     <hr class="soft">
+    <h3>Jugendwettkämpfe (JTSST 2026)</h3>
+    <p class="muted">Legt den Wettkampf gemäss WKB Jugendwettkämpfe 2026 an (05.09.2026):
+      Knaben/Mädchen Kat. A/B/C mit Seilziehen (Cup-Rang), Pendelstafette, Ballwurf,
+      Hindernislauf, Seilspringen und Schwedenstafette (Kat. A); 30 % Auszeichnungen.</p>
+    <form method="post" action="{{ url_for('jtsst_anlegen') }}">
+      <button class="btn" type="submit">JTSST 2026 anlegen</button>
+    </form>
+    <hr class="soft">
     <h3>DEBRA-Backup importieren</h3>
     <p class="muted">Liest einen Backup-Ordner mit den Text-Exporten
       (<span class="mono">WT_*.txt</span>, <span class="mono">WR_*.txt</span>,
       <span class="mono">WI_*.txt</span>, <span class="mono">WT_VERE.txt</span>) ein.
-      <strong>Ersetzt alle bestehenden Daten.</strong></p>
+      <strong>Ersetzt den TSST (Turner/Turnerinnen); der JTSST bleibt erhalten.</strong></p>
     <form method="post" action="{{ url_for('backup_import') }}" class="stack" style="max-width:none;"
-          onsubmit="return confirm('Alle Daten ersetzen und Backup importieren?')">
-      <input type="text" name="import_pfad" placeholder="/pfad/zum/Backup" required>
+          onsubmit="return confirm('TSST ersetzen und Backup importieren?')">
+      <input type="text" name="import_pfad" placeholder="Inputs\TSST\Backup-Final TSST" required>
       <button class="btn" type="submit">Backup importieren</button>
-    </form>
-    <hr class="soft">
-    <h3>Demo</h3>
-    <p class="muted">Setzt alle Daten zurück und lädt den Beispiel-Wettkampf.</p>
-    <form method="post" action="{{ url_for('demo_laden') }}" onsubmit="return confirm('Alle Daten löschen und Demo neu laden?')">
-      <button class="btn danger" type="submit">Demo-Daten neu laden</button>
     </form>
   </div>
 </div>

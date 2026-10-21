@@ -1,0 +1,12 @@
+.git/
+.github/
+.venv/
+__pycache__/
+*.pyc
+data/
+Inputs/
+werkzeuge/
+*.bat
+*.ps1
+*.sh
+docker-compose*.yml

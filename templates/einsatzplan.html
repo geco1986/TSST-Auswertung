@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_druck.html" import druckknoepfe %}
 {% block title %}Einsatzplan{% endblock %}
 {% block content %}
 <div class="page-head"><div><h1>Zeitplan / Einsatzplan (Vormittag)</h1>
@@ -8,9 +9,11 @@
   <form method="post" action="{{ url_for('einsatzplan_generieren') }}" class="btn-row" style="align-items:end;gap:14px;">
     <div><label>Startzeit</label><input type="time" name="startzeit" value="{{ startzeit }}" style="width:120px"></div>
     <button class="btn primary" type="submit">Einsatzplan generieren</button>
-    <a class="btn" href="{{ url_for('einsatzplan_druck', nach='anlage') }}" target="_blank">Druck nach Anlage</a>
-    <a class="btn" href="{{ url_for('einsatzplan_druck', nach='verein') }}" target="_blank">Druck nach Verein</a>
   </form>
+  <div class="druck-zeile" style="margin-top:10px;"><div class="was"><strong>Nach Anlage</strong></div>
+    {{ druckknoepfe('einsatzplan', {'nach': 'anlage'}, klein=True) }}</div>
+  <div class="druck-zeile"><div class="was"><strong>Nach Verein</strong></div>
+    {{ druckknoepfe('einsatzplan', {'nach': 'verein'}, klein=True) }}</div>
   <p class="muted" style="font-size:13px;margin:8px 0 0;">
     Dauer je Gruppe = <em>Zeit/Turner × Gruppengrösse</em>; Anlagen &amp; Zeit/Turner unter
     <a href="{{ url_for('einstellungen') }}">Einstellungen</a>. Heuristik ohne Konflikt-Prüfung über Vereine – bei Bedarf manuell anpassen.</p>
