@@ -344,3 +344,5 @@ body.anlass-jet   { --anlass: #7A2E8E; --anlass-bg: #f4e9f6; }
 .jet-filter-box { margin-bottom: 16px; padding: 12px 18px; }
 .jet-filter-box summary { cursor: pointer; font-weight: 600; color: var(--muted); }
 .jet-filter-box[open] summary { margin-bottom: 12px; }
+
+.sidebar .foot .version { margin-top: 10px; font-size: 11px; opacity: .6; letter-spacing: .03em; }

@@ -143,21 +143,19 @@ def startliste(conn, wk, args):
 def statistik(conn, wk, args):
     spalten = [Spalte("disziplin", "Disziplin", 2.4), Spalte("gruppen", "Angemeldet", 1.15, True, zahlformat="0"),
                Spalte("abgemeldet", "Abgemeldet", 1.15, True, zahlformat="0"),
-               Spalte("einsaetze", "Einsätze", 1, True, zahlformat="0"),
-               Spalte("teilnehmer", "Personen", 1, True, zahlformat="0"),
+               Spalte("einsaetze", "Teilnehmer", 1.1, True, zahlformat="0"),
                Spalte("a30", "Ausz. 30%", 1, True, zahlformat="0"),
                Spalte("a33", "Ausz. 33%", 1, True, zahlformat="0"),
                Spalte("a40", "Ausz. 40%", 1, True, zahlformat="0")]
-    abschnitte, total = [], {"gruppen": 0, "abgemeldet": 0, "einsaetze": 0, "teilnehmer": 0}
+    abschnitte, total = [], {"gruppen": 0, "abgemeldet": 0, "einsaetze": 0}
     for sparte, kats in groupby(_kats(conn, wk), key=lambda k: k["sparte"] or ""):
         zeilen = []
         for k in kats:
             alle = conn.execute("SELECT COUNT(*) FROM teilnehmer WHERE kategorie_id=?", (k["id"],)).fetchone()[0]
             abg = conn.execute("SELECT COUNT(*) FROM teilnehmer WHERE kategorie_id=? AND status='abgem'",
                                (k["id"],)).fetchone()[0]
-            mitglieder = k["anzahl_werte"] or (5 if (k["geschlecht"] or "m") == "m" else 4)
             zeilen.append({"disziplin": R._titel(k), "gruppen": alle, "abgemeldet": abg, "einsaetze": alle - abg,
-                           "teilnehmer": (alle - abg) * mitglieder, "a30": math.ceil(alle * 0.30),
+                           "a30": math.ceil(alle * 0.30),
                            "a33": math.ceil(round(alle * 0.33, 6)), "a40": math.ceil(alle * 0.40)})
         summe = {key: sum(z[key] for z in zeilen) for key in total}
         for key in total:
@@ -166,7 +164,7 @@ def statistik(conn, wk, args):
     if len(abschnitte) > 1:
         abschnitte.append(Abschnitt("Total Anlass", "", [], dict(total, disziplin="Total Anlass")))
     return Liste("STATISTIK", "Statistik Anmeldungen", spalten, abschnitte,
-                 f"{total['einsaetze']} Gruppen · {total['teilnehmer']} Teilnehmende",
+                 f"{total['gruppen']} angemeldet · {total['abgemeldet']} abgemeldet · {total['einsaetze']} Teilnehmer",
                  abschnitt_label="Sparte", dateiname="Statistik")
 
 

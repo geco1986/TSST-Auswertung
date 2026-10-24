@@ -11,7 +11,7 @@
     <div><label>Startnummer <span class="hint">(leer = automatisch {{ naechste_nr }})</span></label>
       <input type="number" name="startnr" value="{{ tn.startnr if tn }}" placeholder="{{ naechste_nr }}"></div>
     <div><label>Jahrgang</label>
-      <input type="number" name="jahrgang" value="{{ tn.jahrgang if tn }}" placeholder="2012"></div>
+      <input type="number" name="jahrgang" id="jahrgang" value="{{ tn.jahrgang if tn and tn.jahrgang }}" placeholder="2012"></div>
   </div>
   <div class="grid-2">
     <div><label>Vorname</label><input type="text" name="vorname" value="{{ tn.vorname if tn }}"></div>
@@ -19,7 +19,7 @@
   </div>
   <div class="grid-2">
     <div><label>Geschlecht</label>
-      <select name="geschlecht">
+      <select name="geschlecht" id="geschlecht">
         <option value="">—</option>
         <option value="m" {{ 'selected' if tn and tn.geschlecht=='m' }}>Turner (m)</option>
         <option value="w" {{ 'selected' if tn and tn.geschlecht=='w' }}>Turnerin (w)</option>
@@ -32,12 +32,23 @@
         <option value="">—</option>
         {% for v in vereine %}<option value="{{ v.id }}" {{ 'selected' if tn and tn.verein_id==v.id }}>{{ v.name }}{% if v.zusatz %} ({{ v.zusatz }}){% endif %}</option>{% endfor %}
       </select></div>
-    <div><label>Kategorie</label>
-      <select name="kategorie_id">
+    <div><label>Kategorie{% if jet_info %} <span class="hint">(leer = aus Jahrgang und Geschlecht)</span>{% endif %}</label>
+      <select name="kategorie_id" id="kategorie_id">
         <option value="">—</option>
         {% for k in kategorien %}<option value="{{ k.id }}" {{ 'selected' if tn and tn.kategorie_id==k.id }}>{{ k.bezeichnung }}</option>{% endfor %}
       </select></div>
   </div>
+  {% if jet_info %}
+  <div class="flash error" id="jet_hinweis" {{ 'hidden' if not pruefung }}>{{ pruefung[0] if pruefung }}</div>
+  {% if pruefung and pruefung[1] %}
+    <p style="margin:-6px 0 0;"><button class="btn sm" type="button"
+      onclick="document.getElementById('kategorie_id').value='{{ pruefung[1] }}'; jetPruefen();">Vorgeschlagene Kategorie übernehmen</button></p>
+  {% endif %}
+  {% if pruefung and ist_chef %}
+    <label class="checks" style="display:inline-flex; gap:6px; align-items:center;">
+      <input type="checkbox" name="abweichung_ok" value="1"> Abweichung bewusst übernehmen (Chef)</label>
+  {% endif %}
+  {% endif %}
   <div class="grid-2">
     <div><label>Vermerk <span class="hint">(nicht gewertet)</span></label>
       <select name="status">
@@ -54,4 +65,33 @@
     <a class="btn ghost" href="{{ url_for('teilnehmer') }}">Zur Liste</a>
   </div>
 </form>
+{% if jet_info %}
+<script>
+// JET: Jahrgang/Geschlecht gegen die gewählte Kategorie prüfen (gleiche Regel wie beim Speichern)
+const JET = {{ jet_info|tojson }};
+function jetPruefen(){
+  const kid = document.getElementById('kategorie_id').value;
+  const jg = parseInt(document.getElementById('jahrgang').value);
+  const ge = document.getElementById('geschlecht').value;
+  const box = document.getElementById('jet_hinweis');
+  let text = '';
+  if(kid && JET.kats[kid]){
+    const [kg, kb] = JET.kats[kid];
+    if(isNaN(jg)) text = 'Beim JET ist der Jahrgang nötig – er bestimmt die Kategorie.';
+    else {
+      const alter = JET.jahr - jg;
+      const soll = Object.keys(JET.alter).find(k => JET.alter[k][0] <= alter && alter <= JET.alter[k][1]);
+      if(!soll) text = 'Jahrgang ' + jg + ' ist im JET ' + JET.jahr + ' nicht startberechtigt.';
+      else if(ge && ge !== kg) text = 'Geschlecht passt nicht zur gewählten Kategorie.';
+      else if(soll !== kb) text = 'Jahrgang ' + jg + ' gehört in Kategorie ' + soll + ', gewählt ist Kategorie ' + kb + '.';
+    }
+  }
+  box.textContent = text; box.hidden = !text;
+}
+['kategorie_id', 'jahrgang', 'geschlecht'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('change', jetPruefen); el.addEventListener('input', jetPruefen);
+});
+</script>
+{% endif %}
 {% endblock %}

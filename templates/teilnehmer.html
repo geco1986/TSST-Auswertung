@@ -69,8 +69,10 @@
 </div>
 <div class="savebar" style="gap:16px;flex-wrap:wrap;">
   <span class="muted">{{ liste|length }} angezeigt · Ausgewählte:</span>
-  <button class="btn danger" type="submit" name="sammel_aktion" value="loeschen"
-          onclick="return confirm('Ausgewählte Teilnehmer löschen?')">Löschen</button>
+  <button class="btn" type="submit" name="sammel_aktion" value="abmelden"
+          onclick="return confirm('Ausgewählte Teilnehmer abmelden?')">Abmelden</button>
+  {% if ist_chef %}<button class="btn danger" type="submit" name="sammel_aktion" value="loeschen"
+          onclick="return confirm('Ausgewählte Teilnehmer endgültig löschen (inkl. Resultate)?')">Löschen</button>{% endif %}
   <span style="display:inline-flex;gap:6px;align-items:center;">
     <select name="status" style="width:150px">
       <option value="">— gewertet —</option>

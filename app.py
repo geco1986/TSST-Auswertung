@@ -14,7 +14,7 @@ from flask import (Flask, Response, abort, flash, g, redirect,
 
 from debra.db import (DB_PATH, get_active_wettkampf, get_db, get_setting,
                       init_db, set_setting)
-from debra import scoring
+from debra import __version__, scoring
 from debra.seed import seed
 
 app = Flask(__name__)
@@ -216,6 +216,7 @@ def inject_globals():
             "ist_chef": _ist_chef(),
             "ist_superuser": _ist_superuser(),
             "ROLLEN": ROLLEN,
+            "VERSION": __version__,
             "kennung": session.get("kennung", ""),
             "aktueller_wettkampf": g.get("wettkampf"),
             "anlass_titel": _anlass_titel(g.db) if g.get("db") is not None else "",
@@ -588,6 +589,38 @@ def teilnehmer():
                            status_labels=scoring.STATUS_LABELS)
 
 
+def _jet_kategorie_pruefen(db, kid, jahrgang, geschlecht):
+    """JET: passt der Jahrgang (und das Geschlecht) zur Kategorie?
+
+    Liefert (meldung, vorschlag_kategorie_id) bei einer Abweichung, sonst None.
+    Die Kategorie ergibt sich aus dem Alter im Wettkampfjahr (WKB 3.).
+    """
+    from debra import jet
+    kat = db.execute("SELECT * FROM kategorie WHERE id=?", (kid,)).fetchone() if kid else None
+    if not kat or kat["berechnung"] != "jet":
+        return None
+    jahr = int(((g.wettkampf["datum"] if g.wettkampf else None) or jet.EVENT_DATUM)[:4])
+    gesch = geschlecht or kat["geschlecht"]
+    if not jahrgang:
+        return "Beim JET ist der Jahrgang nötig – er bestimmt die Kategorie.", None
+    soll = jet.kategorie_aus_jahrgang(jahrgang, jahr)
+    if soll is None:
+        return f"Jahrgang {jahrgang} ist im JET {jahr} nicht startberechtigt (Kategorien A–E: " \
+               f"{jahr - 16} und jünger).", None
+    vorschlag = db.execute("SELECT id, bezeichnung FROM kategorie WHERE wettkampf_id=? AND berechnung='jet' "
+                           "AND geschlecht=? AND abk=?", (kat["wettkampf_id"], gesch,
+                                                          ("K" if gesch == "m" else "M") + soll)).fetchone()
+    if gesch != kat["geschlecht"]:
+        return (f"Geschlecht passt nicht zur Kategorie „{kat['bezeichnung']}“."
+                + (f" Richtig wäre „{vorschlag['bezeichnung']}“." if vorschlag else "")), \
+            vorschlag["id"] if vorschlag else None
+    if soll != jet.kat_buchstabe(kat):
+        return (f"Jahrgang {jahrgang} gehört in Kategorie {soll}, gewählt ist „{kat['bezeichnung']}“."
+                + (f" Richtig wäre „{vorschlag['bezeichnung']}“." if vorschlag else "")), \
+            vorschlag["id"] if vorschlag else None
+    return None
+
+
 @app.route("/teilnehmer/neu", methods=["GET", "POST"])
 @app.route("/teilnehmer/<int:tid>/bearbeiten", methods=["GET", "POST"])
 @login_required
@@ -608,8 +641,30 @@ def teilnehmer_form(tid=None):
                   request.form.get("stationsnr", ""),
                   request.form.get("status", "").strip() or None,
                   request.form.get("bemerkung", "").strip() or None)
+        felder = list(felder)
+        ist_jet = _art(db, g.wettkampf) == "jet"
+        if ist_jet and not felder[6] and felder[3] and felder[4] in ("m", "w"):
+            # JET ohne gewählte Kategorie: aus Jahrgang und Geschlecht bestimmen
+            from debra import jet
+            k = jet.kategorie_aus_jahrgang(felder[3], int((g.wettkampf["datum"] or jet.EVENT_DATUM)[:4]))
+            row = db.execute("SELECT id FROM kategorie WHERE wettkampf_id=? AND berechnung='jet' AND abk=?",
+                             (g.wettkampf["id"], ("K" if felder[4] == "m" else "M") + (k or "?"))).fetchone()
+            felder[6] = row["id"] if row else None
+        if ist_jet and felder[6] and not felder[4]:
+            felder[4] = db.execute("SELECT geschlecht FROM kategorie WHERE id=?", (felder[6],)).fetchone()[0]
+        pruefung = _jet_kategorie_pruefen(db, felder[6], felder[3], felder[4]) if ist_jet else None
+        felder = tuple(felder)
+        abweichung_ok = _ist_chef() and request.form.get("abweichung_ok")
         if not felder[2] and not felder[5]:
             flash("Bitte einen Namen oder einen Verein angeben.", "error")
+        elif ist_jet and not felder[6]:
+            flash("Bitte eine Kategorie wählen (oder Jahrgang und Geschlecht angeben).", "error")
+        elif pruefung and not abweichung_ok:
+            flash(pruefung[0] + ("" if _ist_chef() else " Nur der Chef kann eine Abweichung übernehmen."),
+                  "error")
+            eingabe = dict(zip(("startnr", "vorname", "nachname", "jahrgang", "geschlecht", "verein_id",
+                                "kategorie_id", "stationsnr", "status", "bemerkung"), felder), id=tid)
+            return _teilnehmer_form_seite(db, eingabe, pruefung)
         elif tid:
             db.execute("UPDATE teilnehmer SET startnr=?, vorname=?, nachname=?, jahrgang=?, "
                        "geschlecht=?, verein_id=?, kategorie_id=?, stationsnr=?, status=?, "
@@ -622,18 +677,30 @@ def teilnehmer_form(tid=None):
                        "VALUES(?,?,?,?,?,?,?,?,?,?,?)", (g.wettkampf["id"], *felder))
             db.commit(); flash("Teilnehmer hinzugefügt.", "ok")
             return redirect(url_for("teilnehmer_form"))  # gleich nächsten erfassen
+    return _teilnehmer_form_seite(db, tn, None)
+
+
+def _teilnehmer_form_seite(db, tn, pruefung):
+    from debra import jet
     vereine = db.execute("SELECT * FROM verein ORDER BY name").fetchall()
-    kategorien = db.execute("SELECT * FROM kategorie WHERE wettkampf_id=? ORDER BY bezeichnung",
+    kategorien = db.execute("SELECT * FROM kategorie WHERE wettkampf_id=? ORDER BY sortierung, bezeichnung",
                             (g.wettkampf["id"],)).fetchall()
     naechste_nr = db.execute("SELECT COALESCE(MAX(startnr),0)+1 n FROM teilnehmer WHERE wettkampf_id=?",
                              (g.wettkampf["id"],)).fetchone()["n"]
+    jet_info = None
+    if _art(db, g.wettkampf) == "jet":
+        # für den Hinweis im Formular: Kategorie -> [Geschlecht, A–E], Altersgrenzen, Wettkampfjahr
+        jet_info = {"jahr": int((g.wettkampf["datum"] or jet.EVENT_DATUM)[:4]),
+                    "kats": {k["id"]: [k["geschlecht"], jet.kat_buchstabe(k)] for k in kategorien
+                             if k["berechnung"] == "jet"},
+                    "alter": {k: [v[2], v[3]] for k, v in jet.KATEGORIEN.items()}}
     return render_template("teilnehmer_form.html", tn=tn, vereine=vereine,
                            kategorien=kategorien, naechste_nr=naechste_nr,
-                           status_labels=scoring.STATUS_LABELS)
+                           status_labels=scoring.STATUS_LABELS, jet_info=jet_info, pruefung=pruefung)
 
 
 @app.route("/teilnehmer/<int:tid>/loeschen", methods=["POST"])
-@login_required
+@chef_required
 def teilnehmer_loeschen(tid):
     g.db.execute("DELETE FROM teilnehmer WHERE id=?", (tid,))
     g.db.commit()
@@ -654,7 +721,18 @@ def teilnehmer_sammelaktion():
         return redirect(ziel)
     marks = ",".join("?" * len(ids))
     if aktion == "loeschen":
+        # Löschen nur Chef/Superuser – Eingeber melden ab (bleibt nachvollziehbar, zählt zur Preisbasis)
+        if not _ist_chef():
+            flash("Löschen kann nur der Chef – Teilnehmende bitte auf „Abgemeldet“ setzen.", "error")
+            return redirect(ziel)
         db.execute(f"DELETE FROM teilnehmer WHERE id IN ({marks})", ids)
+        for tid in ids:
+            _log(db, "loeschen", tid, None, "Teilnehmer", "vorhanden", "gelöscht")
+        flash(f"{len(ids)} Anmeldung(en) gelöscht.", "ok")
+    elif aktion == "abmelden":
+        db.execute(f"UPDATE teilnehmer SET status='abgem' WHERE id IN ({marks})", ids)
+        for tid in ids:
+            _log(db, "vermerk", tid, None, "Vermerk", "", "abgem")
         flash(f"{len(ids)} Anmeldung(en) abgemeldet.", "ok")
     elif aktion == "status":
         st = request.form.get("status", "").strip() or None

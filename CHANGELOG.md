@@ -2,7 +2,8 @@
 
 Alle wesentlichen Änderungen an DEBRA-Web.
 
-## [Unveröffentlicht]
+## [0.7.0] – 2026-10-24
+- Versionsnummer unten links in der Seitenleiste.
 ### Hinzugefügt (JET – Jugend-Einzelturntag)
 - Dritter Anlass „JET“ im Umschalter oben rechts (WKB JET 2026, 05.07.2026 Rheinau): Mädchen/Knaben
   Kat. A–C (6-Kampf) und D/E (4-Kampf), Geräte, Leichtathletik und Plausch frei wählbar (`debra/jet.py`).
