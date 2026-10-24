@@ -11,7 +11,8 @@
 # ------------------------------------------------------------------
 services:
   tsst-auswertung:
-    image: ghcr.io/geco1986/tsst-auswertung:latest
+    image: ghcr.io/geco1986/tsst-auswertung:latest   # oder fest: :v0.7.0
+    pull_policy: always             # bei jedem Start/Update neu laden – sonst bleibt das alte Image
     container_name: tsst-auswertung
     restart: unless-stopped
     ports:

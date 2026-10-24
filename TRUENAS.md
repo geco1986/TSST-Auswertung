@@ -75,6 +75,15 @@ App stoppen → `data\debra.sqlite3` vom PC in das Dataset kopieren (ersetzt die
 Fehlende Tabellen/Spalten (z. B. für JET und Superuser) werden beim Start automatisch ergänzt.
 
 ## Updates
-Neues Image bauen lassen (Push ins Repo) → in TrueNAS die App **aktualisieren**
-(zieht `:latest` neu). Die Daten im Dataset bleiben erhalten; fehlende
-Datenbank-Spalten werden beim Start automatisch migriert.
+Neues Image bauen lassen (Push ins Repo) → in TrueNAS die App **aktualisieren**.
+Die Daten im Dataset bleiben erhalten; fehlende Datenbank-Spalten werden beim Start
+automatisch migriert.
+
+**Wichtig:** TrueNAS lädt ein Image mit unverändertem Tag (`:latest`) sonst nicht neu,
+sondern startet das alte weiter. Darum steht in `docker-compose.truenas.yml`
+`pull_policy: always`. Alternativ den Tag fest auf die Version setzen
+(z. B. `ghcr.io/geco1986/tsst-auswertung:v0.7.0`) und bei jedem Update ändern.
+Wenn trotzdem die alte Version läuft: App stoppen → *Apps → Configuration →
+Manage Container Images* → `ghcr.io/geco1986/tsst-auswertung` löschen → App starten.
+
+Die laufende Version steht in der App unten links in der Seitenleiste (z. B. „Version 0.7.0“).
