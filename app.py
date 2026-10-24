@@ -19,6 +19,7 @@ from debra.seed import seed
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("DEBRA_SECRET", "debra-turnverein-dev-key")
+app.config["MAX_CONTENT_LENGTH"] = 256 * 1024 * 1024     # Upload von Import-Dateien (ZIP/Backups)
 
 GERAETE_EINHEITEN = ["Note", "Zeit", "Weite", "Hoehe", "Anzahl"]
 KATEGORIE_TYPEN = {"einzel": "Einzel", "sektion": "Sektion", "gruppe": "Gruppe"}
@@ -111,6 +112,74 @@ def _eingabe_pfad(text, standard=""):
         v = v.replace("\\", "/")
     from debra.db import pfad_finden
     return pfad_finden(v if os.path.isabs(v) else os.path.join(os.path.dirname(os.path.abspath(__file__)), v))
+
+
+UPLOAD_ENDUNGEN = (".zip", ".txt", ".xls", ".xlsx", ".pdf", ".mdb", ".csv")
+
+
+def _upload_speichern(feld="dateien"):
+    """Speichert hochgeladene Import-Dateien in einen neuen Ordner neben der Datenbank
+    (…/uploads/<Zeitstempel>) und entpackt ZIP-Dateien. Liefert den Ordner oder None.
+
+    So funktionieren alle Importe auch im Container ohne Zugriff auf Dateipfade.
+    """
+    import shutil
+    import time
+    import zipfile
+    from datetime import datetime
+    dateien = [f for f in request.files.getlist(feld) if f and f.filename]
+    if not dateien:
+        return None
+    basis = os.path.join(os.path.dirname(os.path.abspath(DB_PATH)), "uploads")
+    os.makedirs(basis, exist_ok=True)
+    for alt in os.listdir(basis):                      # Uploads älter als 14 Tage aufräumen
+        pfad = os.path.join(basis, alt)
+        if os.path.isdir(pfad) and time.time() - os.path.getmtime(pfad) > 14 * 86400:
+            shutil.rmtree(pfad, ignore_errors=True)
+    ziel = os.path.join(basis, datetime.now().strftime("%Y%m%d-%H%M%S-%f"))
+    os.makedirs(ziel)
+
+    def sicherer_name(name):
+        name = os.path.basename(name.replace("\\", "/")).strip().strip(".")
+        return "".join(ch for ch in name if ch not in '<>:"|?*' and ord(ch) >= 32) or "datei"
+
+    for f in dateien:
+        name = sicherer_name(f.filename)
+        if not name.lower().endswith(UPLOAD_ENDUNGEN):
+            raise ValueError(f"„{name}“: erlaubt sind {', '.join(UPLOAD_ENDUNGEN)}")
+        pfad = os.path.join(ziel, name)
+        f.save(pfad)
+        if name.lower().endswith(".zip"):
+            with zipfile.ZipFile(pfad) as z:
+                for info in z.infolist():
+                    teile = [t for t in info.filename.replace("\\", "/").split("/") if t not in ("", ".")]
+                    if info.is_dir() or not teile or ".." in teile:
+                        continue                       # Verzeichnisse und unsichere Pfade überspringen
+                    if not teile[-1].lower().endswith(UPLOAD_ENDUNGEN) or teile[0] == "__MACOSX":
+                        continue
+                    aus = os.path.join(ziel, *[sicherer_name(t) for t in teile])
+                    os.makedirs(os.path.dirname(aus), exist_ok=True)
+                    with z.open(info) as quelle, open(aus, "wb") as senke:
+                        shutil.copyfileobj(quelle, senke)
+            os.remove(pfad)
+    return ziel
+
+
+def _finde_ordner(wurzel, *muster):
+    """Erster Ordner unterhalb von wurzel, der Dateien eines der Muster enthält (z. B. 'WT_*.txt')."""
+    import glob
+    for ordner, _, _ in sorted(os.walk(wurzel), key=lambda x: (x[0].count(os.sep), x[0])):
+        if any(glob.glob(os.path.join(ordner, m)) for m in muster):
+            return ordner
+    return wurzel
+
+
+def _upload_oder_pfad(feld_pfad, *muster, standard=""):
+    """Hochgeladene Dateien (Vorrang) bzw. der eingegebene Pfad auf dem Server."""
+    ordner = _upload_speichern()
+    if ordner:
+        return _finde_ordner(ordner, *muster) if muster else ordner
+    return _eingabe_pfad(request.form.get(feld_pfad), standard)
 
 
 def _darf_anlass(art):
@@ -1565,9 +1634,9 @@ def jtsst_anlegen():
 def jtsst_import():
     """Importiert die JTSST-Anmeldungen (Gesamtübersicht + Alt-Export) aus einem Ordner."""
     from debra.jtsst import import_ordner
-    ordner = _eingabe_pfad(request.form.get("ordner"), os.path.join("Inputs", "JTSST"))
     quelle = request.form.get("quelle", "uebersicht")
     try:
+        ordner = _upload_oder_pfad("ordner", "*.xlsx", "*.xls", standard=os.path.join("Inputs", "JTSST"))
         b = import_ordner(g.db, ordner, quelle)
         flash("JTSST-Anmeldungen importiert ({quelle}): {gruppen} Gruppen "
               "(Knaben {k}, Mädchen {m}).".format(
@@ -1589,9 +1658,13 @@ def backup_import():
     """Importiert ein DEBRA-Backup (Ordner mit WT_/WR_/WI_-Textdateien)."""
     from debra.import_backup import importieren
     from debra.wkb import anwenden
-    pfad = _eingabe_pfad(request.form.get("import_pfad"))
+    try:
+        pfad = _upload_oder_pfad("import_pfad", "WT_*.txt")
+    except Exception as e:  # noqa: BLE001
+        flash(f"Upload fehlgeschlagen: {e}", "error")
+        return redirect(url_for("einstellungen") + "#tsst/import")
     if not pfad:
-        flash("Bitte den Pfad zum Backup-Ordner angeben.", "error")
+        flash("Bitte die Backup-Dateien hochladen oder den Pfad zum Backup-Ordner angeben.", "error")
         return redirect(url_for("einstellungen") + "#tsst/import")
     try:
         b = importieren(pfad, reset=True)
@@ -2357,6 +2430,21 @@ def import_ordner():
     return render_template("import_ordner.html", pruefung=p, ordner=ordner)
 
 
+@app.route("/import/hochladen", methods=["POST"])
+@superuser_required
+def import_ordner_hochladen():
+    """Excel-Anmeldungen (TSST + JTSST) hochladen und zum Prüfschritt weiterleiten."""
+    try:
+        ordner = _upload_speichern()
+    except Exception as e:  # noqa: BLE001
+        flash(f"Upload fehlgeschlagen: {e}", "error")
+        return redirect(url_for("einstellungen") + "#allgemein/import")
+    if not ordner:
+        flash("Bitte Excel-Dateien (oder ein ZIP) auswählen.", "error")
+        return redirect(url_for("einstellungen") + "#allgemein/import")
+    return redirect(url_for("import_ordner", ordner=_finde_ordner(ordner, "*.xlsx", "*.xls")))
+
+
 @app.route("/import/ordner", methods=["POST"])
 @superuser_required
 def import_ordner_uebernehmen():
@@ -2465,9 +2553,13 @@ def vorjahr_ansicht():
 @app.route("/vorjahr/import", methods=["POST"])
 @superuser_required
 def vorjahr_import():
+    import glob
     from debra import vorjahr as vj
-    pfad = _eingabe_pfad(request.form.get("pdf_pfad"))
     try:
+        pfad = _upload_oder_pfad("pdf_pfad", "WT_*.txt", "*.pdf")
+        if pfad and os.path.isdir(pfad) and not glob.glob(os.path.join(pfad, "WT_*.txt")):
+            pdfs = glob.glob(os.path.join(pfad, "*.pdf"))   # hochgeladene Rangliste als PDF
+            pfad = pdfs[0] if pdfs else pfad
         n = vj.importieren(conn=g.db, pdf_pfad=pfad)
         flash(f"Vorjahres-Rangliste importiert: {n} Stafetten-Resultate.", "ok")
     except Exception as exc:  # pragma: no cover
@@ -2769,11 +2861,44 @@ def jet_import():
             "WHERE t.wettkampf_id=? AND r.erfasst_von<>'Import'", (w["id"],)).fetchone()["c"]
 
     def rel(p):
-        return os.path.relpath(p, basis) if p else ""
+        if not p:
+            return ""
+        r = os.path.relpath(p, basis)
+        return p if r.startswith("..") else r          # Uploads (neben der DB) absolut zeigen
     return render_template("jet_import.html", pruefung=pruefung, bestehend=bestehend, jet=jet,
                            knaben=rel(dateien["m"]) if dateien["m"] else rel(vorschlag["m"]),
                            maedchen=rel(dateien["w"]) if dateien["w"] else rel(vorschlag["w"]),
                            geprueft=any(dateien.values()))
+
+
+@app.route("/jet/import/hochladen", methods=["POST"])
+@superuser_required
+def jet_import_hochladen():
+    """JET-Anmeldungen hochladen (DEBRA-Backup, JR_/MR_JET.xls oder Startlisten-PDF) und prüfen."""
+    from debra import jet
+    try:
+        ordner = _upload_speichern()
+    except Exception as e:  # noqa: BLE001
+        flash(f"Upload fehlgeschlagen: {e}", "error")
+        return redirect(url_for("jet_import"))
+    if not ordner:
+        flash("Bitte Dateien (oder ein ZIP) auswählen.", "error")
+        return redirect(url_for("jet_import"))
+    backup = _finde_ordner(ordner, "WT_*.txt")
+    dateien = {}
+    if any(f.startswith("WT_") for f in os.listdir(backup)):
+        dateien = {g_: backup for g_ in ("m", "w") if jet.parse_backup(backup, g_)}
+    else:
+        for wurzel, _, namen in os.walk(ordner):
+            for n in sorted(namen):
+                g_ = jet._geschlecht_aus(n)
+                if g_ and g_ not in dateien and n.lower().endswith((".xls", ".xlsx", ".pdf")):
+                    dateien[g_] = os.path.join(wurzel, n)
+    if not dateien:
+        flash("In den hochgeladenen Dateien wurden keine JET-Anmeldungen erkannt (DEBRA-Backup mit "
+              "WT_-Dateien, JR_JET.xls/MR_JET.xls oder Startliste Knaben/Mädchen als PDF).", "error")
+        return redirect(url_for("jet_import"))
+    return redirect(url_for("jet_import", knaben=dateien.get("m", ""), maedchen=dateien.get("w", "")))
 
 
 @app.route("/konfiguration/jet", methods=["POST"])

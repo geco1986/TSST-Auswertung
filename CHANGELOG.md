@@ -2,6 +2,12 @@
 
 Alle wesentlichen Änderungen an DEBRA-Web.
 
+## [0.7.1] – 2026-10-24
+- Alle Importe per Upload im Browser (Dateien oder ZIP): DEBRA-Backup TSST, Excel TSST + JTSST,
+  JTSST-Anmeldungen, JET-Anmeldungen (Backup, Excel, Startliste-PDF) und Vorjahr. Uploads liegen
+  neben der Datenbank unter `uploads/` und werden nach 14 Tagen aufgeräumt. Pfade auf dem Server
+  funktionieren weiterhin.
+
 ## [0.7.0] – 2026-10-24
 - Versionsnummer unten links in der Seitenleiste.
 ### Hinzugefügt (JET – Jugend-Einzelturntag)

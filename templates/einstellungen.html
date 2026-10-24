@@ -51,10 +51,17 @@
       (Blätter TU/TI) und JTSST-Gesamtübersicht (Blätter Knaben/Mädchen). Fehlende TSST-Disziplinen
       werden angelegt; vor dem Import wird die Datenbank gesichert. Mit Prüfschritt.
       Der JET hat einen eigenen Import (Reiter JET → Import).</p>
-    <form method="get" action="{{ url_for('import_ordner') }}" class="stack" style="max-width:none;">
+    <form method="post" action="{{ url_for('import_ordner_hochladen') }}" enctype="multipart/form-data"
+          class="stack" style="max-width:none;">
+      <label>Excel-Dateien hochladen <span class="hint">(mehrere oder ein ZIP)</span></label>
+      <input type="file" name="dateien" multiple accept=".xlsx,.xls,.zip" style="max-width:none;">
+      <button class="btn primary" type="submit">Hochladen &amp; prüfen</button>
+    </form>
+    <details style="margin-top:10px;"><summary class="muted" style="font-size:13px;cursor:pointer;">oder Ordner auf dem Server</summary>
+    <form method="get" action="{{ url_for('import_ordner') }}" class="stack" style="max-width:none;margin-top:8px;">
       <input type="text" name="ordner" placeholder="Inputs\Import">
       <button class="btn" type="submit">Ordner prüfen</button>
-    </form>
+    </form></details>
   </div>
   {% endif %}
   {% if ist_superuser %}
@@ -220,9 +227,11 @@
       <h3>DEBRA-Backup importieren (Turner/Turnerinnen)</h3>
       <p class="muted" style="font-size:13px;">Übernimmt Anmeldungen, Abmeldungen und Resultate inkl. offizieller Ränge
         und wendet die WKB an. JTSST und JET bleiben erhalten.</p>
-      <form method="post" action="{{ url_for('backup_import') }}" class="stack" style="max-width:none;"
-            onsubmit="return confirm('Turner/Turnerinnen ersetzen?')">
-        <input type="text" name="import_pfad" placeholder="Inputs\TSST\Backup-Final TSST" required>
+      <form method="post" action="{{ url_for('backup_import') }}" enctype="multipart/form-data" class="stack"
+            style="max-width:none;" onsubmit="return confirm('Turner/Turnerinnen ersetzen?')">
+        <label>Backup-Dateien hochladen <span class="hint">(alle WT_/WR_/WI_-Dateien des Backup-Ordners markieren oder ein ZIP)</span></label>
+        <input type="file" name="dateien" multiple accept=".txt,.zip,.mdb" style="max-width:none;">
+        <input type="text" name="import_pfad" placeholder="oder Ordner auf dem Server, z. B. Inputs\TSST\Backup-Final TSST">
         <button class="btn" type="submit">Importieren</button>
       </form>
       <hr class="soft">
@@ -234,8 +243,10 @@
       <p class="muted" style="font-size:13px;">Grundlage der automatischen Bahnen-/Serieneinteilung.
         Aktuell <strong>{{ vorjahr_n }}</strong> Stafetten-Resultate gespeichert.
         <a href="{{ url_for('vorjahr_ansicht') }}">Ansehen</a></p>
-      <form method="post" action="{{ url_for('vorjahr_import') }}" class="stack" style="max-width:none;">
-        <input type="text" name="pdf_pfad" placeholder="DEBRA-Backup-Ordner oder Rangliste-PDF (leer = Inputs\TSST\Backup-Final TSST)">
+      <form method="post" action="{{ url_for('vorjahr_import') }}" enctype="multipart/form-data" class="stack" style="max-width:none;">
+        <label>Hochladen <span class="hint">(Rangliste als PDF oder Final-Backup als Dateien/ZIP)</span></label>
+        <input type="file" name="dateien" multiple accept=".pdf,.txt,.zip" style="max-width:none;">
+        <input type="text" name="pdf_pfad" placeholder="oder Pfad auf dem Server (leer = Inputs\TSST\Backup-Final TSST)">
         <button class="btn" type="submit">Vorjahr importieren</button>
       </form>
       {% else %}
@@ -255,9 +266,11 @@
       <p class="muted">Ordner mit der Gesamtübersicht (<span class="mono">Anmeldungen JTSST …xlsx</span>) und den Exporten
         der alten Software (<span class="mono">JR_TSST.xls</span>, <span class="mono">MR_TSST.xls</span>).
         <strong>Ersetzt alle bestehenden JTSST-Gruppen.</strong></p>
-      <form method="post" action="{{ url_for('jtsst_import') }}" class="stack" style="max-width:none;"
-            onsubmit="return confirm('Alle JTSST-Gruppen ersetzen und Anmeldungen importieren?')">
-        <input type="text" name="ordner" placeholder="Inputs\JTSST (Ordner im Programmverzeichnis oder absoluter Pfad)">
+      <form method="post" action="{{ url_for('jtsst_import') }}" enctype="multipart/form-data" class="stack"
+            style="max-width:none;" onsubmit="return confirm('Alle JTSST-Gruppen ersetzen und Anmeldungen importieren?')">
+        <label>Excel-Dateien hochladen <span class="hint">(Gesamtübersicht und/oder JR_TSST.xls/MR_TSST.xls, oder ein ZIP)</span></label>
+        <input type="file" name="dateien" multiple accept=".xlsx,.xls,.zip" style="max-width:none;">
+        <input type="text" name="ordner" placeholder="oder Ordner auf dem Server (leer = Inputs\JTSST)">
         <select name="quelle">
           <option value="uebersicht">Gruppenzahlen aus Gesamtübersicht (empfohlen)</option>
           <option value="alt">Gruppenzahlen aus Export der alten Software</option>

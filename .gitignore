@@ -14,3 +14,6 @@ __pycache__/
 
 # persönliche Claude-Code-Einstellungen
 .claude/settings.local.json
+
+# hochgeladene Import-Dateien
+uploads/

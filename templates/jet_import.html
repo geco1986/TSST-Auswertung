@@ -5,15 +5,28 @@
   <p class="sub">Quelle je Sparte: DEBRA-Backup-Ordner (WT_/WR_-Dateien, mit Startnummern), Anmelde-Export
     (<span class="mono">JR_JET.xls</span> / <span class="mono">MR_JET.xls</span>) oder DEBRA-Startliste nach Kategorie (PDF).</p></div></div>
 
-<form method="get" class="card" style="margin-bottom:16px;">
+<form method="post" action="{{ url_for('jet_import_hochladen') }}" enctype="multipart/form-data"
+      class="card" style="margin-bottom:16px;">
+  <h3 style="margin-top:0;">Dateien hochladen</h3>
+  <p class="muted" style="font-size:13px;margin-top:0;">DEBRA-Backup: alle Dateien des Backup-Ordners markieren
+    (WT_/WR_/WI_…) oder als ZIP. Oder <span class="mono">JR_JET.xls</span> und <span class="mono">MR_JET.xls</span>
+    bzw. die Startlisten Knaben/Mädchen (PDF). Danach folgt die Prüfung – noch wird nichts ersetzt.</p>
+  <input type="file" name="dateien" multiple accept=".txt,.zip,.xls,.xlsx,.pdf,.mdb" style="max-width:none;">
+  <div class="btn-row" style="margin-top:10px;"><button class="btn primary" type="submit">Hochladen &amp; prüfen</button></div>
+</form>
+
+<details class="card" style="margin-bottom:16px;" {{ 'open' if geprueft }}>
+<summary style="cursor:pointer;font-weight:600;">Pfad auf dem Server</summary>
+<form method="get" style="margin-top:10px;">
   <div class="grid-2">
     <label>Knaben<input type="text" name="knaben" value="{{ knaben }}" placeholder="Inputs\jet\Backup"></label>
     <label>Mädchen<input type="text" name="maedchen" value="{{ maedchen }}" placeholder="Inputs\jet\Backup"></label>
   </div>
   <p class="muted" style="font-size:13px;">Pfad relativ zum Programmordner oder absolut. Leer lassen = Sparte
     nicht importieren (bestehende Anmeldungen bleiben).</p>
-  <button class="btn primary" type="submit">Prüfen</button>
+  <button class="btn" type="submit">Prüfen</button>
 </form>
+</details>
 
 {% if pruefung %}
 <div class="grid-2" style="align-items:start;">
