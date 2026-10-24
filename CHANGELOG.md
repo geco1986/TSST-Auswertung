@@ -3,6 +3,50 @@
 Alle wesentlichen Änderungen an DEBRA-Web.
 
 ## [Unveröffentlicht]
+### Hinzugefügt (JET – Jugend-Einzelturntag)
+- Dritter Anlass „JET“ im Umschalter oben rechts (WKB JET 2026, 05.07.2026 Rheinau): Mädchen/Knaben
+  Kat. A–C (6-Kampf) und D/E (4-Kampf), Geräte, Leichtathletik und Plausch frei wählbar (`debra/jet.py`).
+- Die drei Anlässe sind für die Eingabe klar getrennt: eigene Farbe je Anlass (TSST oliv, JTSST petrol,
+  JET violett), Anlass-Band über jeder Seite, Navigation je Anlass, Startnummern nur im gewählten Anlass.
+- JET-Erfassung: Raster je Kategorie, Verein (Riege), Disziplin (Posten) oder Startnummer; Geräte als
+  Note, LA/Plausch als Messwert – Note, Streichresultat, „falsche Disziplin“ (Note 6) und Total live.
+- Wertungstabelle pflegbar (Seite „Wertungstabelle“): Note je Kategorie A–E, lineare Interpolation,
+  Vorlagen „WKB-Tabelle 2026“ und „DEBRA-Formeln“; erfasste Noten werden beim Speichern neu berechnet.
+- JET-Import mit Prüfschritt: DEBRA-Backup (WT_/WR_, inkl. Startnummern, Abmeldungen, Resultate),
+  Anmelde-Export JR_JET.xls/MR_JET.xls (Kategorie aus dem Jahrgang) oder DEBRA-Startliste (PDF).
+- JET-Ranglisten (Bildschirm, PDF modern/klassisch) mit Wert (Note) je Disziplin; gleiches Total =
+  gleicher Rang, Auszeichnung 30 % der Rangierten. Abgeglichen mit der Rangliste JET 2026
+  (430 von 432 Totalen identisch mit DEBRA-Formeln).
+- TSST-/JTSST-Importe und „WKB anwenden“ lassen den JET unangetastet.
+- JET-Einzelerfassung: Startnummer eingeben -> Disziplinen untereinander (Geräte, LA, Plausch),
+  Enter springt nach unten, „Nächste Startnummer“ speichert und lädt die nächste Person.
+- Einstellungen auf einer Seite mit Reitern: Allgemein, TSST, JTSST, JET; je Anlass Unterreiter
+  (Anlass, Auszeichnungen, Stafetten, Zeitplan & Plausibilität, Wertungstabelle, Import). Speichern und
+  „Anteil auf alle Kategorien“ wirken nur noch auf den gewählten Anlass.
+- JET-Wertung über Formeln: je Disziplin, Sparte und Kategorie eine Formel (x = Messwert); beim
+  Speichern wird daraus die Wertungstabelle erzeugt (Note 10.00 … 6.00), erfasste Noten werden neu
+  berechnet. Formeln werden geprüft (nur Zahlen, x, + - * / ^, Klammern; Note muss in eine Richtung
+  verlaufen). Standard = DEBRA-Formeln (wie Rangliste 2026).
+- Rolle Superuser (mit Passwort, beim ersten Login festzulegen): wählt den aktiven Anlass, legt
+  Wettkämpfe an/löscht sie und pflegt die JET-Wertungsformeln. Der Chef bearbeitet nur den aktiven
+  Anlass (Einstellungen, Kategorien). Importe (DEBRA-Backup, Excel, JTSST, JET, Vorjahr) und das
+  Anlegen von JTSST/JET kann nur der Superuser.
+- JET-Schnellerfassung als eigener Menüpunkt (wie TSST/JTSST): grosses Startnummernfeld, Disziplinen
+  untereinander; Erfassung mehrerer Personen unter „Nach Kategorie / Riege“.
+- Ranglisten-Übersicht mit Status je Rangliste (Eingabe, Kontrolliert, Gedruckt, WKL). „Gedruckt“ ist
+  erst möglich, wenn alle Teilnehmenden ein Resultat oder einen Vermerk haben (auch der HTML-Druck
+  markiert erst dann); die Markierung lässt sich zurücknehmen. Vor dem Druck der Gesamt-Rangliste
+  Warnung mit Liste der noch nicht kontrollierten bzw. nicht freigegebenen Ranglisten.
+- Kontrollblatt (alle Anlässe): nur noch die Startnummer statt Verein/Name; beim JET stehen die
+  Disziplinen als Spaltenköpfe und der erfasste Messwert wird gezeigt.
+
+### Hinzugefügt (Import)
+- Ordner-Import der Anmeldungen (Einstellungen → „Ordner prüfen“, Standard `Inputs\Import`):
+  erkennt TSST-Anmeldezahlen (TU/TI) und JTSST-Gesamtübersicht (Knaben/Mädchen) am Inhalt,
+  zeigt je Sparte Gruppen und Abgleich mit der Total-Zeile, sichert die DB und ersetzt die Anmeldungen.
+- TSST-Disziplinen (Turner 10, Turnerinnen 9) werden ohne DEBRA-Backup angelegt (`debra/tsst.py`).
+- Kommandozeile: `python -m debra.excel_import [Ordner] [--ja]`.
+
 ### Hinzugefügt (Listen)
 - Alle druckbaren Listen im modernen Layout als PDF und als Excel (.xlsx): Startlisten (Verein,
   Disziplin, Startnummer), Statistik, Einsatzplan, Kranzliste, Top-Leistungen, Kontrollblatt,

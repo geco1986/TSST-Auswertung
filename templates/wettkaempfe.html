@@ -15,10 +15,12 @@
           <td class="mono">{{ w.datum or '—' }}</td>
           <td>{% if w.aktiv %}<span class="kranz">● aktiv</span>{% else %}<span class="pill">inaktiv</span>{% endif %}</td>
           <td class="right btn-row" style="justify-content:flex-end;">
+            {% if ist_superuser %}
             {% if not w.aktiv %}<a class="btn sm" href="{{ url_for('wettkampf_aktiv', wid=w.id) }}">Aktivieren</a>{% endif %}
             <form method="post" action="{{ url_for('wettkampf_loeschen', wid=w.id) }}" onsubmit="return confirm('Wettkampf inkl. aller Daten löschen?')">
               <button class="btn sm danger" type="submit">Löschen</button>
             </form>
+            {% endif %}
           </td>
         </tr>
       {% else %}
@@ -28,6 +30,7 @@
     </table>
   </div>
 
+  {% if ist_superuser %}
   <div class="card">
     <h3 style="margin-top:0;">Neuer Wettkampf</h3>
     <form method="post" class="stack" style="max-width:none;">
@@ -39,5 +42,8 @@
       <button class="btn primary" type="submit">Anlegen</button>
     </form>
   </div>
+  {% else %}
+  <div class="card"><p class="muted" style="margin:0;">Aktiv setzen, anlegen und löschen kann nur der Superuser.</p></div>
+  {% endif %}
 </div>
 {% endblock %}

@@ -189,20 +189,31 @@ def rangliste_einzel(conn, kategorie):
         "LEFT JOIN verein v ON v.id=t.verein_id WHERE t.kategorie_id=? ",
         (kategorie["id"],),
     ).fetchall()
+    abk_je_pos = {k["position"]: k["abk"] for k in kat_diszs}
 
     eintraege = []
     for t in teilnehmende:
         res_rows = conn.execute(
-            "SELECT position, note, status FROM resultat WHERE teilnehmer_id=?",
+            "SELECT position, note, wert, status FROM resultat WHERE teilnehmer_id=?",
             (t["id"],)).fetchall()
         noten_map = {r["position"]: r["note"] for r in res_rows}
+        werte_map = {r["position"]: r["wert"] for r in res_rows}
         # Einzelne Mitglieder als DNS/DNF -> Wert zählt nicht im Durchschnitt
         dnsdnf = {r["position"]: (r["status"] if "status" in r.keys() else None)
                   for r in res_rows if ("status" in r.keys() and r["status"] in ("dns", "dnf"))}
         noten = [noten_map.get(p) for p in positionen]
         erfasst_any = any(n is not None for n in noten) or bool(dnsdnf)
-        score, anzahl, gestrichen, best = gruppen_score(
-            noten, berechnung, kategorie["streich"], richtung)
+        jet_info = None
+        if berechnung == "jet":
+            # JET: Disziplinen frei wählbar – Streichung/falsche Disziplin nach WKB (debra/jet.py)
+            from . import jet
+            jet_info = jet.wertung([abk_je_pos.get(p) for p in positionen], noten, jet.kat_buchstabe(kategorie))
+            gestrichen = jet_info["gestrichen"]
+            score, anzahl = jet_info["total"], sum(1 for n in noten if n is not None)
+            best = max(jet_info["folge"]) if jet_info["folge"] else None
+        else:
+            score, anzahl, gestrichen, best = gruppen_score(
+                noten, berechnung, kategorie["streich"], richtung)
         person = ((t["vorname"] or "") + " " + (t["nachname"] or "")).strip()
         verein = t["verein_name"] or ""
         zusatz = t["verein_zusatz"] or ""
@@ -230,7 +241,12 @@ def rangliste_einzel(conn, kategorie):
             "dnsdnf": dnsdnf,
             "gestrichen": gestrichen,
             "best": best,
-            "folge": [n for i, n in enumerate(noten) if n is not None and i not in gestrichen],
+            # JET: gleiches Total = gleicher Rang (wie Rangliste 2026), kein Tiebreak
+            "folge": ([] if jet_info else
+                      [n for i, n in enumerate(noten) if n is not None and i not in gestrichen]),
+            "werte": [werte_map.get(p) for p in positionen],
+            "falsch": jet_info["falsch"] if jet_info else set(),
+            "hinweise": jet_info["hinweise"] if jet_info else [],
             "status": status,
             "status_kurz": STATUS_KURZ.get(status, ""),
             "status_label": STATUS_LABELS.get(status, ""),

@@ -14,3 +14,32 @@
   {%- endif %}
 </span>
 {%- endmacro %}
+
+{# box=False: keine Meldung auf der Seite, nur die Rückfrage beim Drucken #}
+{% macro gesamt_warnung(nicht_bereit, box=True) %}
+{% if nicht_bereit %}
+{% if box %}
+<div class="flash error gesamt-warnung" style="margin-bottom:12px;">
+  <strong>Achtung: {{ nicht_bereit|length }} Rangliste(n) sind noch nicht kontrolliert bzw. von der WKL freigegeben.</strong>
+  <ul style="margin:6px 0 0 18px; padding:0; font-weight:400;">
+    {% for n in nicht_bereit[:15] %}
+      <li><a href="{{ url_for('rangliste', kid=n.kat.id) }}">{% if n.kat.sparte %}{{ n.kat.sparte }} · {% endif %}{{ n.kat.bezeichnung }}</a>
+        – {{ n.fehlt|join(', ') }}</li>
+    {% endfor %}
+    {% if nicht_bereit|length > 15 %}<li>… und {{ nicht_bereit|length - 15 }} weitere</li>{% endif %}
+  </ul>
+</div>
+{% endif %}
+<script>
+// Vor dem Druck der Gesamt-Rangliste nachfragen (läuft vor dem Vorschau-Handler)
+document.addEventListener('click', function(ev){
+  var b = ev.target.closest('.gesamt-druck [data-vorschau], .gesamt-druck a.btn'); if(!b) return;
+  if(!confirm('{{ nicht_bereit|length }} Rangliste(n) sind noch nicht kontrolliert bzw. von der WKL freigegeben.\nTrotzdem drucken?')){
+    ev.preventDefault(); ev.stopImmediatePropagation();
+  }
+}, true);
+</script>
+{% elif box %}
+<div class="flash ok" style="margin-bottom:12px;">Alle Ranglisten der Gesamt-Rangliste sind kontrolliert und von der WKL freigegeben.</div>
+{% endif %}
+{% endmacro %}

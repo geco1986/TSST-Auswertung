@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+{% block title %}JET-Erfassung{% endblock %}
+{% block content %}
+{% set D = jet.DISZIPLINEN %}
+<div class="page-head">
+  <div><h1>JET · {{ 'Schnellerfassung' if schnell else 'Erfassung nach Kategorie / Riege' }}</h1>
+    <p class="sub">Geräte: Note eingeben · Leichtathletik/Plausch: Messwert eingeben – die Note rechnet die
+      {% if ist_superuser %}<a href="{{ url_for('jet_wertungstabelle') }}">Wertungstabelle</a>{% else %}Wertungstabelle{% endif %} aus.</p></div>
+  <div class="spacer"></div>
+  {% if schnell %}<a class="btn" href="{{ url_for('jet_erfassung') }}">Nach Kategorie / Riege erfassen →</a>
+  {% else %}<a class="btn primary" href="{{ url_for('jet_schnellerfassung') }}">⚡ Schnellerfassung per Startnummer</a>{% endif %}
+</div>
+
+{% if schnell %}
+<form method="get" action="{{ url_for('jet_schnellerfassung') }}" class="card jet-nr-suche" id="nrsuche">
+  <label for="nrbox">Startnummer</label>
+  <input type="number" name="nr" id="nrbox" value="{{ nr if nr is not none and einzeln }}" placeholder="z. B. 501"
+         autocomplete="off" min="1">
+  <button class="btn primary" type="submit">Erfassen</button>
+  <span class="muted">Nummer eingeben + Enter → alle Disziplinen der Person untereinander</span>
+</form>
+
+{% else %}
+<form method="get" class="card jet-filter" id="filter" style="margin-bottom:16px;">
+  <div class="btn-row" style="gap:14px; align-items:flex-end;">
+    <label>Sparte
+      <select name="g" onchange="this.form.kat.value=''; this.form.verein.value=''; this.form.submit()">
+        <option value="">– wählen –</option>
+        <option value="w" {{ 'selected' if gesch == 'w' }}>Mädchen</option>
+        <option value="m" {{ 'selected' if gesch == 'm' }}>Knaben</option>
+      </select></label>
+    <label>Kategorie
+      <select name="kat" onchange="this.form.submit()">
+        <option value="">alle</option>
+        {% for k in kats if not gesch or k.geschlecht == gesch %}
+          <option value="{{ k.id }}" {{ 'selected' if kid == k.id }}>{{ k.bezeichnung.split(',')[0] }}</option>
+        {% endfor %}
+      </select></label>
+    <label>Verein (Riege)
+      <select name="verein" onchange="this.form.submit()">
+        <option value="">alle</option>
+        {% for v in vereine %}<option value="{{ v.id }}" {{ 'selected' if vid == v.id }}>{{ v.name }}</option>{% endfor %}
+      </select></label>
+    <label>Disziplin (Posten)
+      <select name="disz" onchange="this.form.submit()">
+        <option value="">alle Disziplinen</option>
+        {% for a in jet.PROGRAMM[gesch or 'w'] %}<option value="{{ a }}" {{ 'selected' if disz == a }}>{{ D[a][0] }}</option>{% endfor %}
+      </select></label>
+    <button class="btn" type="submit">Anzeigen</button>
+    {% if aktiv %}<a class="btn ghost" href="{{ url_for('jet_erfassung', g=gesch) }}">Filter zurücksetzen</a>{% endif %}
+  </div>
+</form>
+{% endif %}
+
+{% if schnell and not einzeln %}
+  <script>document.getElementById('nrbox').focus();</script>
+  <div class="card empty"><p>Startnummer eingeben und mit <strong>Enter</strong> laden. Nach dem Speichern
+    direkt die nächste Nummer eingeben.</p></div>
+{% elif not aktiv %}
+  {% for sparte, g_, praefix, kurz in jet.SPARTEN %}
+    <h2 class="jet-h2">{{ kurz }}</h2>
+    <div class="tiles">
+      {% for u in uebersicht if u.k.geschlecht == g_ %}
+        <a class="tile" href="{{ url_for('jet_erfassung', kat=u.k.id) }}">
+          <div class="ic">✎</div>
+          <h3>{{ u.k.bezeichnung.split(',')[0] }}</h3>
+          <p>{{ u.k.bezeichnung.split(',', 1)[1] }} · {{ u.mit }}/{{ u.tn }} erfasst</p>
+          <div class="bar"><span style="width:{{ (u.mit / u.tn * 100) if u.tn else 0 }}%"></span></div>
+        </a>
+      {% endfor %}
+    </div>
+  {% endfor %}
+  {% if not uebersicht %}
+    <div class="card empty"><p>Der JET hat noch keine Kategorien.</p></div>
+  {% endif %}
+{% elif not zeilen %}
+  <div class="card empty"><p>Keine Teilnehmenden für diese Auswahl.</p></div>
+{% elif einzeln %}
+{% set z = zeilen[0] %}{% set t = z.t %}
+<form method="post" id="erf">
+  <div class="card jet-einzel" data-tid="{{ t.id }}" data-kat="{{ z.kat }}">
+    <div class="jet-einzel-kopf">
+      <span class="rangnr jet-nr">Nr. {{ t.startnr }}</span>
+      <div><strong class="jet-name">{{ t.nachname }} {{ t.vorname }}</strong>
+        <div class="muted">{{ t.jahrgang or '' }} · {{ t.verein_zusatz or '' }} {{ t.verein_name or '' }}</div></div>
+      <span class="spacer"></span>
+      <span class="pill">{{ t.kat_bez }}</span>
+    </div>
+    <table class="jet-einzel-tab">
+      <thead><tr><th>Disziplin</th><th class="num">Eingabe</th><th></th><th class="num">Note</th></tr></thead>
+      {% for gr, n in gruppen_kopf %}
+        <tbody class="gr-{{ gr }}">
+          <tr class="gruppe"><th colspan="4">{{ jet.GRUPPEN[gr] }}</th></tr>
+          {% for a in spalten if D[a][1] == gr %}
+            {% set c = z.zellen[a] %}
+            <tr>
+              <td><label for="w_{{ t.id }}_{{ a }}"><strong>{{ D[a][0] }}</strong> <span class="muted">{{ a }}</span></label></td>
+              <td class="num"><input type="text" inputmode="decimal" class="note-in" id="w_{{ t.id }}_{{ a }}"
+                     name="w_{{ t.id }}_{{ a }}" value="{{ c.wert }}" data-abk="{{ a }}" autocomplete="off"></td>
+              <td class="muted einheit">{{ 'Note' if gr == 'geraete' else D[a][2] }}</td>
+              <td class="num"><span class="jet-note {{ 'gestrichen' if c.gestrichen }} {{ 'falsch' if c.falsch }}"
+                     id="n_{{ t.id }}_{{ a }}">{% if c.note is not none %}{{ '%.2f'|format(c.note) }}{% endif %}</span></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      {% endfor %}
+      <tfoot>
+        <tr><th colspan="3">Total <span class="muted" style="font-weight:400;">({{ jet.KATEGORIEN[z.kat][1] }} Disziplinen zählen)</span></th>
+          <th class="num total jet-total" id="total_{{ t.id }}">{{ '%.2f'|format(z.wertung.total) if z.wertung.total is not none else '–' }}</th></tr>
+      </tfoot>
+    </table>
+    <div class="hinweis jet-hinweis" id="h_{{ t.id }}">{{ z.wertung.hinweise|join(' · ') }}</div>
+    <label class="jet-vermerk">Vermerk
+      <select name="st_{{ t.id }}" class="vermerk">
+        <option value="">–</option>
+        {% for key, lab in status_labels.items() if key != 'abgem' %}
+          <option value="{{ key }}" {{ 'selected' if t.status == key }}>{{ lab }}</option>
+        {% endfor %}
+      </select></label>
+  </div>
+  <div class="savebar">
+    <label style="margin:0;">Nächste Startnummer
+      <input type="number" name="weiter" id="weiter" style="width:110px;" placeholder="Nr."></label>
+    <button class="btn primary" type="submit">Speichern</button>
+    <span class="note">Enter springt zur nächsten Disziplin, nach der letzten ins Feld „Nächste Startnummer“ –
+      Enter dort speichert und lädt die nächste Person. Zeiten als 11.53 oder 1:05.20. Wert 0 = kein gültiger
+      Versuch (Note 6). Leeres Feld = nicht geturnt.</span>
+  </div>
+</form>
+{% else %}
+<form method="post" id="erf">
+  <div class="table-wrap erfassung jet-grid">
+    <table>
+      <thead>
+        <tr class="gruppen">
+          <th colspan="3"></th>
+          {% for gr, n in gruppen_kopf %}<th class="gr-{{ gr }}" colspan="{{ n }}">{{ jet.GRUPPEN[gr] }}</th>{% endfor %}
+          <th colspan="{{ 2 if disz else 3 }}"></th>
+        </tr>
+        <tr>
+          <th class="num">Nr.</th><th>Name</th><th>Kat.</th>
+          {% for a in spalten %}
+            <th class="num gr-{{ D[a][1] }}" title="{{ D[a][0] }}">{{ a }}
+              <div class="einheit">{{ 'Note' if D[a][1] == 'geraete' else D[a][2] }}</div></th>
+          {% endfor %}
+          <th class="num">Total</th><th>Hinweis</th>{% if not disz %}<th>Vermerk</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+      {% for z in zeilen %}
+        {% set t = z.t %}
+        <tr data-tid="{{ t.id }}" data-kat="{{ z.kat }}">
+          <td class="num startnr">{{ t.startnr }}</td>
+          <td><a href="{{ url_for('jet_schnellerfassung', nr=t.startnr) }}" title="Einzeln erfassen (Disziplinen untereinander)"><strong>{{ t.nachname }}</strong> {{ t.vorname }}</a>
+            <div class="muted" style="font-size:12px;">{{ t.jahrgang or '' }} · {{ t.verein_zusatz or '' }} {{ t.verein_name or '' }}</div></td>
+          <td><span class="pill">{{ z.kat }}</span></td>
+          {% for a in spalten %}
+            {% set c = z.zellen[a] %}
+            <td class="num gr-{{ D[a][1] }}">
+              <input type="text" inputmode="decimal" class="note-in" name="w_{{ t.id }}_{{ a }}" value="{{ c.wert }}"
+                     data-abk="{{ a }}" data-col="{{ loop.index0 }}" autocomplete="off">
+              <div class="jet-note {{ 'gestrichen' if c.gestrichen }} {{ 'falsch' if c.falsch }}" id="n_{{ t.id }}_{{ a }}">
+                {%- if D[a][1] != 'geraete' and c.note is not none %}{{ '%.2f'|format(c.note) }}{% endif -%}
+              </div>
+            </td>
+          {% endfor %}
+          <td class="num total" id="total_{{ t.id }}">{{ '%.2f'|format(z.wertung.total) if z.wertung.total is not none else '–' }}</td>
+          <td class="hinweis" id="h_{{ t.id }}">{{ z.wertung.hinweise|join(' · ') }}</td>
+          {% if not disz %}
+          <td><select name="st_{{ t.id }}" class="vermerk">
+            <option value="">–</option>
+            {% for key, lab in status_labels.items() if key != 'abgem' %}
+              <option value="{{ key }}" {{ 'selected' if t.status == key }}>{{ lab }}</option>
+            {% endfor %}
+          </select></td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="savebar">
+    <button class="btn primary" type="submit">Resultate speichern</button>
+    <span class="note">Enter springt zur nächsten Person in derselben Disziplin. Klick auf einen Namen zeigt
+      die Disziplinen untereinander. Zeiten als 11.53 oder 1:05.20. Wert 0 = kein gültiger Versuch (Note 6).
+      Leeres Feld = nicht geturnt.</span>
+  </div>
+</form>
+{% endif %}
+
+{% if aktiv and zeilen %}
+<script>
+const TABELLEN = {{ tabellen|tojson }};
+const DISZ = {{ D|tojson }};
+const PROGRAMM = {{ jet.PROGRAMM[gesch]|tojson }};
+const KAT = {{ jet.KATEGORIEN|tojson }};
+const MINIMUM = {{ jet.MINIMUM|tojson }};
+const GRUPPEN = {{ jet.GRUPPEN|tojson }};
+const EINZELN = {{ einzeln|tojson }};
+
+function zahl(txt, abk){
+  txt = (txt||'').trim().replace(',', '.');
+  if(txt === '') return null;
+  if(txt.indexOf(':') > 0 && DISZ[abk][2] === 's'){
+    const [m, s] = txt.split(':'); const v = parseInt(m)*60 + parseFloat(s);
+    return isNaN(v) ? NaN : Math.round(v*100)/100;
+  }
+  const v = parseFloat(txt); return isNaN(v) ? NaN : v;
+}
+function abrunden(x){ return Math.floor(x*100 + 1e-7) / 100; }
+// gleiche Rechnung wie debra/jet.py note_aus_tabelle
+function note(abk, kat, wert){
+  if(wert === null || isNaN(wert)) return null;
+  if(DISZ[abk][1] === 'geraete') return wert;
+  if(wert === 0) return 6;
+  const zeilen = ((TABELLEN[abk]||{})[kat]) || [];
+  if(!zeilen.length) return null;
+  const p = {};
+  zeilen.forEach(([w, n]) => { p[w] = Math.max(n, p[w] === undefined ? n : p[w]); });
+  const xs = Object.keys(p).map(Number).sort((a,b)=>a-b);
+  const tief = DISZ[abk][3] === 'tief';
+  if(wert <= xs[0]) return p[xs[0]];
+  if(wert >= xs[xs.length-1]) return p[xs[xs.length-1]];
+  for(let i=0; i+1<xs.length; i++){
+    const a = xs[i], b = xs[i+1];
+    if(a <= wert && wert <= b) return abrunden(p[a] + (p[b]-p[a]) * (wert-a) / (b-a));
+  }
+  return null;
+}
+// gleiche Regeln wie debra/jet.py wertung(): zu viele -> beste streichen, falsche Disziplin -> 6
+function wertung(noten, kat){
+  const anzahl = KAT[kat][1], min = MINIMUM[kat];
+  const items = []; PROGRAMM.forEach((a, i) => { if(noten[a] !== null && noten[a] !== undefined) items.push([i, a, DISZ[a][1], noten[a]]); });
+  const gestr = new Set(), falsch = new Set(), hinweise = [];
+  const zaehle = (gr, ohne) => items.filter(it => it[2]===gr && !gestr.has(it[0]) && it[0]!==ohne).length;
+  while(items.length - gestr.size > anzahl){
+    const kand = items.filter(it => !gestr.has(it[0])).sort((x,y)=>y[3]-x[3]);
+    const w = kand.find(it => it[2]==='plausch' || zaehle(it[2], it[0]) >= min) || kand[0];
+    gestr.add(w[0]);
+  }
+  if(gestr.size) hinweise.push(gestr.size + ' Disziplin(en) zu viel – beste gestrichen');
+  let frei = [];
+  ['geraete','la','plausch'].forEach(gr => {
+    let l = items.filter(it => it[2]===gr && !gestr.has(it[0])).sort((x,y)=>x[3]-y[3]);
+    if(gr !== 'plausch'){
+      if(l.length < min) hinweise.push('zu wenig ' + GRUPPEN[gr] + ' (' + l.length + ' statt ' + min + ')');
+      l = l.length > min ? l.slice(min) : [];
+    }
+    frei = frei.concat(l);
+  });
+  const plaetze = anzahl - 2*min;
+  if(frei.length > plaetze){
+    frei.sort((x,y)=>y[3]-x[3]).slice(0, frei.length - plaetze).forEach(it => {
+      falsch.add(it[0]); hinweise.push(it[1] + ' gilt als falsche Disziplin (Note 6)'); });
+  }
+  const gez = items.filter(it => !gestr.has(it[0])).map(it => falsch.has(it[0]) ? 6 : it[3]);
+  const fehlend = Math.max(0, anzahl - gez.length);
+  if(fehlend && items.length) hinweise.push(fehlend + ' Disziplin(en) fehlen');
+  return {total: gez.length ? gez.reduce((a,b)=>a+b, 0) : null, gestr, falsch, hinweise};
+}
+// Zeilen-Daten: auch Disziplinen, die im Posten-Modus nicht angezeigt werden
+const GESPEICHERT = {{ zeilen|map(attribute='zellen')|list|tojson }};
+const TIDS = {{ zeilen|map(attribute='t')|map(attribute='id')|list|tojson }};
+
+function rechne(tr){
+  const tid = tr.dataset.tid, kat = tr.dataset.kat;
+  const idx = TIDS.indexOf(parseInt(tid));
+  const noten = {};
+  PROGRAMM.forEach(a => { const c = GESPEICHERT[idx][a]; noten[a] = c && c.note !== null ? c.note : null; });
+  tr.querySelectorAll('.note-in').forEach(inp => {
+    const a = inp.dataset.abk, v = zahl(inp.value, a), n = note(a, kat, v);
+    const el = document.getElementById('n_'+tid+'_'+a);
+    inp.classList.toggle('fehler', v !== null && (isNaN(v) || (DISZ[a][1]==='geraete' && (v<0 || v>10))));
+    noten[a] = n;
+    el.textContent = ((EINZELN || DISZ[a][1] !== 'geraete') && n !== null && !isNaN(n)) ? n.toFixed(2) : '';
+  });
+  const w = wertung(noten, kat);
+  PROGRAMM.forEach((a, i) => {
+    const el = document.getElementById('n_'+tid+'_'+a);
+    if(el){ el.classList.toggle('gestrichen', w.gestr.has(i)); el.classList.toggle('falsch', w.falsch.has(i)); }
+  });
+  document.getElementById('total_'+tid).textContent = w.total === null ? '–' : w.total.toFixed(2);
+  document.getElementById('h_'+tid).textContent = w.hinweise.join(' · ');
+}
+document.querySelectorAll('#erf [data-tid]').forEach(tr => {
+  tr.querySelectorAll('.note-in').forEach(inp => {
+    inp.addEventListener('input', () => rechne(tr));
+    inp.addEventListener('keydown', e => {
+      if(e.key === 'Enter' && EINZELN){
+        e.preventDefault();
+        const all = [...document.querySelectorAll('.note-in')];
+        const i = all.indexOf(inp);
+        const ziel = i + 1 < all.length ? all[i+1] : document.getElementById('weiter');
+        ziel.focus(); ziel.select();
+      } else if(e.key === 'Enter'){
+        e.preventDefault();
+        const all = [...document.querySelectorAll('.note-in')].filter(x => x.dataset.col === inp.dataset.col);
+        const i = all.indexOf(inp);
+        if(i > -1 && i+1 < all.length){ all[i+1].focus(); all[i+1].select(); }
+      }
+    });
+  });
+});
+let geaendert = false;
+document.getElementById('erf').addEventListener('input', () => { geaendert = true; });
+document.getElementById('erf').addEventListener('submit', () => { geaendert = false; });
+window.addEventListener('beforeunload', e => { if(geaendert){ e.preventDefault(); e.returnValue = ''; } });
+const erstes = [...document.querySelectorAll('.note-in')].find(i => !i.value) || document.querySelector('.note-in');
+if(EINZELN && {{ (request.args.get('gespeichert') == '1')|tojson }}) document.getElementById('weiter').focus();
+else if(erstes) erstes.focus();
+</script>
+{% endif %}
+{% endblock %}

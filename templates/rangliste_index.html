@@ -1,12 +1,13 @@
 {% extends "base.html" %}
-{% from "_druck.html" import druckknoepfe %}
+{% from "_druck.html" import druckknoepfe, gesamt_warnung %}
 {% block title %}Ranglisten{% endblock %}
 {% block content %}
 <div class="page-head"><div><h1>Ranglisten</h1><p class="sub">Auswertung je Kategorie</p></div>
   <div class="spacer"></div>
   <a class="btn" href="{{ url_for('rangliste_gesamt') }}">Reihenfolge &amp; Zusatzblätter</a>
 </div>
-<div class="card" style="margin-bottom:16px;">
+{{ gesamt_warnung(nicht_bereit, box=False) }}
+<div class="card gesamt-druck" style="margin-bottom:16px;">
   <div class="druck-zeile"><div class="was"><strong>Gesamt-Rangliste</strong><small>jede Disziplin auf neuer Seite</small></div>
     {{ druckknoepfe('rangliste') }}</div>
   <div class="druck-zeile"><div class="was"><strong>Gesamt-Rangliste fortlaufend</strong><small>Disziplinen direkt anschliessend – spart Papier</small></div>
@@ -15,10 +16,17 @@
 {% if kategorien %}
 <div class="tiles">
   {% for k in kategorien %}
+    {% set st = status[k.id] %}
     <a class="tile" href="{{ url_for('rangliste', kid=k.id) }}">
       <div class="ic">★</div>
       <h3>{{ k.bezeichnung }}</h3>
-      <p>{{ KATEGORIE_TYPEN.get(k.typ, k.typ) }}{% if k.abk %} · {{ k.abk }}{% endif %}</p>
+      <p>{% if k.sparte %}{{ k.sparte }} · {% endif %}{{ st.erledigt }}/{{ st.gruppen }} eingegeben</p>
+      <div class="rl-status">
+        <span class="st {{ 'ok' if st.eingegeben else 'offen' }}" title="{{ st.offen }} ohne Resultat/Vermerk">{{ '✓' if st.eingegeben else st.offen }} Eingabe</span>
+        {% if st.kontrolliert is not none %}<span class="st {{ 'ok' if st.kontrolliert else '' }}">{{ '✓ ' if st.kontrolliert }}Kontrolliert</span>{% endif %}
+        <span class="st {{ 'ok' if st.gedruckt else '' }}">{{ '✓ ' if st.gedruckt }}Gedruckt</span>
+        <span class="st {{ 'ok' if st.fertig else '' }}" title="{{ st.fertig_von }}">{{ '✓ ' if st.fertig }}WKL</span>
+      </div>
     </a>
   {% endfor %}
 </div>

@@ -40,8 +40,60 @@ def _gruppe(verein, zusatz=None, gruppennr=None):
 # --------------------------------------------------------------------------- #
 # Startlisten
 # --------------------------------------------------------------------------- #
+def startliste_jet(conn, wk, nach):
+    """JET: Einzelpersonen – Start-Nr. / Name / Jahrgang; nach Verein mit Unterteilung je Kategorie."""
+    rows = conn.execute(
+        "SELECT t.startnr, t.nachname, t.vorname, t.jahrgang, v.name AS verein, t.verein_zusatz AS zusatz, "
+        "k.id AS kid, k.bezeichnung, k.sortierung FROM teilnehmer t "
+        "LEFT JOIN verein v ON v.id=t.verein_id JOIN kategorie k ON k.id=t.kategorie_id "
+        f"WHERE t.wettkampf_id=? AND {OHNE_ABGEMELDETE} ORDER BY t.startnr", (wk["id"],)).fetchall()
+    titel = {"verein": "nach Verein", "kategorie": "nach Kategorie"}.get(nach, "nach Startnummer")
+
+    def person(r):
+        return {"startnr": r["startnr"], "name": f"{r['nachname'] or ''} {r['vorname'] or ''}".strip(),
+                "jahrgang": r["jahrgang"], "verein": f"{r['zusatz'] or ''} {r['verein'] or ''}".strip(),
+                "kategorie": r["bezeichnung"]}
+
+    startnr = Spalte("startnr", "Start-Nr.", 0.9, rechts=True, zahlformat="0")
+    name = Spalte("name", "Name", 3.2, art="fett")
+    jg = Spalte("jahrgang", "Jahrgang", 0.9, rechts=True, zahlformat="0")
+    info = f"{len(rows)} gemeldete Teilnehmende"
+    if nach == "verein":
+        spalten = [startnr, name, jg, Spalte("kategorie", "Kategorie", 2.5, nur_excel=True)]
+        abschnitte = []
+        reihe = sorted(rows, key=lambda r: ((r["verein"] or "").lower(), r["zusatz"] or "", r["sortierung"],
+                                            (r["nachname"] or "").lower(), (r["vorname"] or "").lower()))
+        for verein, grp in groupby(reihe, key=lambda r: f"{r['zusatz'] or ''} {r['verein'] or '—'}".strip()):
+            grp = list(grp)
+            zeilen = []
+            for _, kgrp in groupby(grp, key=lambda r: r["kid"]):
+                kgrp = list(kgrp)
+                zeilen.append({"_zwischen": f"{kgrp[0]['bezeichnung']} · {len(kgrp)}"})
+                zeilen += [person(r) for r in kgrp]
+            abschnitte.append(Abschnitt(verein, f"{len(grp)} Teilnehmende", zeilen))
+        return Liste("STARTLISTE", f"Startliste {titel}", spalten, abschnitte, info,
+                     abschnitt_label="Verein", neue_seite=True, dateiname="Startliste_nach_Verein")
+    if nach == "kategorie":
+        spalten = [startnr, name, jg, Spalte("verein", "Verein", 2.6)]
+        abschnitte = []
+        reihe = sorted(rows, key=lambda r: (r["sortierung"], (r["verein"] or "").lower(),
+                                            (r["nachname"] or "").lower(), (r["vorname"] or "").lower()))
+        for _, grp in groupby(reihe, key=lambda r: r["kid"]):
+            grp = list(grp)
+            abschnitte.append(Abschnitt(grp[0]["bezeichnung"], f"{len(grp)} Teilnehmende",
+                                        [person(r) for r in grp]))
+        return Liste("STARTLISTE", f"Startliste {titel}", spalten, abschnitte, info,
+                     abschnitt_label="Kategorie", neue_seite=True, dateiname="Startliste_nach_Kategorie")
+    spalten = [startnr, name, jg, Spalte("verein", "Verein", 2.2), Spalte("kategorie", "Kategorie", 2.6)]
+    return Liste("STARTLISTE", f"Startliste {titel}", spalten, [Abschnitt("", "", [person(r) for r in rows])],
+                 info, dateiname="Startliste_nach_Startnummer")
+
+
 def startliste(conn, wk, args):
     nach = args.get("nach", "verein")
+    if conn.execute("SELECT 1 FROM kategorie WHERE wettkampf_id=? AND berechnung='jet' LIMIT 1",
+                    (wk["id"],)).fetchone():
+        return startliste_jet(conn, wk, nach)
     rows = conn.execute(
         "SELECT t.startnr, t.gruppennr, t.verband, v.name AS verein, t.verein_zusatz AS zusatz, "
         "k.id AS kid, k.sparte, k.bezeichnung, k.sortierung FROM teilnehmer t "
@@ -204,35 +256,65 @@ def _positionen(conn, k):
                                        "ORDER BY position", (k["id"],))] or [1]
 
 
+def kontroll_spalten(conn, k):
+    """Wert-Spalten des Kontrollblatts: [(position, key, kopf)].
+
+    JET: eine Spalte je Disziplin mit deren Kürzel als Kopf; sonst die Einzelwerte 1., 2., …
+    """
+    if (k["berechnung"] or "") == "jet":
+        return [(r["position"], r["abk"], r["abk"]) for r in conn.execute(
+            "SELECT kd.position, d.abk FROM kategorie_disziplin kd JOIN disziplin d ON d.id=kd.disziplin_id "
+            "WHERE kd.kategorie_id=? ORDER BY kd.position", (k["id"],))]
+    return [(p, f"w{i}", f"{i}.") for i, p in enumerate(_positionen(conn, k), start=1)]
+
+
+def kontroll_werte(conn, k, tid):
+    """{position: Text} wie erfasst – beim JET der Messwert (Geräte: Note), sonst die Note."""
+    jet = (k["berechnung"] or "") == "jet"
+    werte = {}
+    for r in conn.execute("SELECT r.position, r.note, r.wert, r.status, d.einheit FROM resultat r "
+                          "LEFT JOIN kategorie_disziplin kd ON kd.kategorie_id=? AND kd.position=r.position "
+                          "LEFT JOIN disziplin d ON d.id=kd.disziplin_id WHERE r.teilnehmer_id=?", (k["id"], tid)):
+        if r["status"]:
+            werte[r["position"]] = r["status"].upper()
+        elif jet and r["wert"] is not None:
+            werte[r["position"]] = scoring.fmt_zeit(r["wert"]) if r["einheit"] == "s" else f"{r['wert']:g}"
+        else:
+            werte[r["position"]] = _zahl2(r["note"])
+    return werte
+
+
 def kontrollblatt(conn, wk, args):
     kennung = args.get("kennung", "")
     nur_offen = args.get("offen", "1") == "1"
     kat_filter = int(args["kat"]) if str(args.get("kat", "")).isdigit() else None
-    abschnitte, max_pos = [], 1
+    abschnitte, kopf = [], {}
     for k in _kats(conn, wk, ohne_stafetten=True):
         if kat_filter and k["id"] != kat_filter:
             continue
-        pos = _positionen(conn, k)
+        sp = kontroll_spalten(conn, k)
         zeilen = []
         for t in conn.execute(
-                "SELECT DISTINCT t.id, t.startnr, t.gruppennr, t.kontrolliert_am, v.name AS verein FROM teilnehmer t "
-                "LEFT JOIN verein v ON v.id=t.verein_id JOIN resultat r ON r.teilnehmer_id=t.id "
+                "SELECT DISTINCT t.id, t.startnr, t.kontrolliert_am FROM teilnehmer t "
+                "JOIN resultat r ON r.teilnehmer_id=t.id "
                 "WHERE t.kategorie_id=? AND r.erfasst_von=? ORDER BY t.startnr", (k["id"], kennung)).fetchall():
             if nur_offen and t["kontrolliert_am"]:
                 continue
-            werte = {r["position"]: (r["status"].upper() if r["status"] else _zahl2(r["note"]))
-                     for r in conn.execute("SELECT position, note, status FROM resultat WHERE teilnehmer_id=?",
-                                           (t["id"],))}
-            zeile = {"startnr": t["startnr"], "gruppe": _gruppe(t["verein"], None, t["gruppennr"]),
-                     "kontrolliert": bool(t["kontrolliert_am"])}
-            zeile.update({f"w{i}": werte.get(p, "") for i, p in enumerate(pos, start=1)})
+            werte = kontroll_werte(conn, k, t["id"])
+            zeile = {"startnr": t["startnr"], "kontrolliert": bool(t["kontrolliert_am"])}
+            zeile.update({key: werte.get(p, "") for p, key, _ in sp})
             zeilen.append(zeile)
         if zeilen:
-            max_pos = max(max_pos, len(pos))
-            abschnitte.append(Abschnitt(_kat_name(k), f"{len(zeilen)} Gruppen", zeilen))
-    spalten = [Spalte("startnr", "Start", 0.7, True, zahlformat="0"), Spalte("gruppe", "Verein / Gruppe", 2.4, art="fett")]
-    spalten += [Spalte(f"w{i}", f"{i}.", 0.75, True) for i in range(1, max_pos + 1)]
-    spalten.append(Spalte("kontrolliert", "Kontrolliert", 0.9, art="box"))
+            for _, key, label in sp:
+                kopf.setdefault(key, label)
+            abschnitte.append(Abschnitt(_kat_name(k), f"{len(zeilen)} Einträge", zeilen))
+    # gemeinsame Spalten aller Abschnitte (JET: Mädchen und Knaben haben andere Geräte)
+    from .jet import DISZIPLINEN as JET_DISZ
+    reihe = list(JET_DISZ)
+    keys = sorted(kopf, key=lambda key: (reihe.index(key) if key in reihe else 100 + int(key[1:])))
+    spalten = [Spalte("startnr", "Start-Nr.", 1.2, True, zahlformat="0")]
+    spalten += [Spalte(key, kopf[key], 0.75, True) for key in keys]
+    spalten.append(Spalte("kontrolliert", "Kontrolliert", 1.3, art="box"))
     from datetime import datetime
     return Liste("KONTROLLBLATT", "Kontrollblatt (4-Augen-Kontrolle)", spalten, abschnitte,
                  f"Kennung {kennung or '–'} · Stand {datetime.now():%d.%m.%Y %H:%M}"
@@ -425,6 +507,84 @@ def serienplan(conn, wk, args):
                  dateiname=f"Serienplan_{R._titel(k)}_{rundentext}")
 
 
+def serienplan_pdf(conn, wk, args, opt):
+    """Eine Serie je Seite (A4 quer), Zeilen und Schrift so gross wie die Seite es zulässt."""
+    k = _kat(conn, wk, args)
+    runde = args.get("runde") or ("vorlauf" if k["hat_final"] else "final")
+    bahnen = k["bahnen"] or 8
+    serien = sorted(_serien(conn, k, runde).items())
+    rundentext = "Vorläufe" if runde == "vorlauf" else ("Finals" if k["hat_final"] else "Endläufe")
+    liste = Liste("SERIENPLAN", f"Serienplan {_kat_name(k)} · {rundentext}", [], [], quer=True)
+    c, z, buf, _, (W, H, L, RR, FUSS), akzent, dunkel = _rahmen(liste, wk, opt)
+    rechts = " · ".join(x for x in (R.datum_lang(wk["datum"]), wk["ort"] or "") if x)
+    spalten = [("Bahn", 0.75), ("Start-Nr.", 1.05), ("Verein / Gruppe", 3.5), ("Zeit", 1.5), ("Disq. (Grund)", 1.7)]
+    gesamt = sum(b for _, b in spalten)
+    xs, x = [], L
+    for label, b in spalten:
+        w = (RR - L) * b / gesamt
+        xs.append((label, x, w))
+        x += w
+
+    def serienname(s):
+        if runde == "final" and k["hat_final"]:
+            return ("A-Final" if s == 1 else "B-Final") if k["final_typ"] == "ab" else "Final"
+        return f"{s}. Serie"
+
+    for nr, (s, belegt) in enumerate(serien):
+        if nr:
+            c.showPage()
+        # Kopf: Anlass, Disziplin, Serie
+        z.text(L, 26, opt["kopfzeile"].upper(), "b", 8, akzent, sperrung=0.8)
+        z.text(RR, 26, rechts, "m", 8.5, R.GRAU, "r")
+        z.linie(33, L, RR)
+        box_w = 190
+        z.rechteck(RR - box_w, 42, box_w, 58, akzent, radius=8)
+        z.text(RR - box_w / 2, 92, z.kuerzen(serienname(s), "b", 34, box_w - 16), "b", 34, white, "c")
+        z.text(L, 66, f"{(k['sparte'] or '').upper()}  ·  {rundentext.upper()}", "b", 11, akzent, sperrung=0.8)
+        titel_size = 30
+        titel = R._titel(k)
+        while titel_size > 16 and z.breite(titel, "b", titel_size) > RR - L - box_w - 20:
+            titel_size -= 1
+        z.text(L, 96, titel, "b", titel_size, R.TINTE)
+        # Tabelle über die ganze restliche Höhe
+        y = 112
+        for label, x, w in xs:
+            z.text(x + 6, y + 15, label.upper(), "b", 10, R.TINTE, sperrung=0.6)
+        z.linie(y + 22, L, RR, R.TINTE, 1.2)
+        y += 22
+        zh = (FUSS - 8 - y) / bahnen
+        gross = min(zh * 0.55, 40)          # Schriftgrösse aus der Zeilenhöhe
+        for b in range(1, bahnen + 1):
+            t = belegt.get(b)
+            if b % 2 == 0:
+                z.rechteck(L, y, RR - L, zh, R.ZEBRA)
+            mitte = y + zh / 2 + gross * 0.36
+            (_, x0, w0), (_, x1, w1), (_, x2, w2), (_, x3, w3), (_, x4, w4) = xs
+            z.text(x0 + w0 / 2, mitte, str(b), "b", gross, akzent, "c")
+            if t:
+                z.text(x1 + w1 - 10, mitte, str(t["startnr"] or ""), "s", gross, R.TINTE, "r")
+                verein = _gruppe(t["verein"], None, t["gruppennr"])
+                size = gross
+                while size > 12 and z.breite(verein, "b", size) > w2 - 16:
+                    size -= 0.5
+                z.text(x2 + 8, y + zh / 2 + size * 0.36, z.kuerzen(verein, "b", size, w2 - 16), "b", size, R.TINTE)
+            else:
+                z.text(x2 + 8, mitte, "– frei –", "m", gross * 0.6, R.GRAU)
+            c.setStrokeColor(R.LINIE)
+            c.setLineWidth(0.8)
+            for x in (x1, x2, x3, x4):      # senkrechte Spaltentrenner
+                c.line(x, H - y, x, H - y - zh)
+            z.linie(y + zh, L, RR, R.LINIE, 0.8)
+            y += zh
+    if not serien:
+        z.text(L, 26, opt["kopfzeile"].upper(), "b", 8, akzent, sperrung=0.8)
+        z.text(L, 96, R._titel(k), "b", 30, R.TINTE)
+        z.text(L, 130, "Noch keine Bahnen zugeteilt.", "m", 14, R.GRAU)
+    c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
 def abschluss_pdf(conn, wk, args, opt):
     """Abschlussblatt 'Disziplin fertig erfasst' mit Unterschriften."""
     k = _kat(conn, wk, args)
@@ -470,7 +630,7 @@ LISTEN = {
                       R.einzel_pdf(conn, wk, _kat(conn, wk, args)) if args.get("kid")
                       else R.gesamt_pdf(conn, wk, fortlaufend=args.get("umbruch") == "fortlaufend"))},
     "notenblatt": {"titel": "Notenblatt", "liste": notenblatt, "pdf": notenblatt_pdf},
-    "serienplan": {"titel": "Serienplan", "liste": serienplan},
+    "serienplan": {"titel": "Serienplan", "liste": serienplan, "pdf": serienplan_pdf},
     "abschluss": {"titel": "Abschlussblatt", "liste": None, "pdf": abschluss_pdf},
 }
 

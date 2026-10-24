@@ -33,6 +33,7 @@ FUSS = 765.0                       # Fusslinie (von oben)
 FARBEN = {                         # Sparten-Balken, Disziplin-Balken, Zeilen-Hinterlegung
     "tsst": ((158, 156, 54), (222, 220, 118), (254, 252, 150)),
     "jtsst": ((97, 143, 157), (161, 207, 221), (193, 239, 253)),
+    "jet": ((122, 46, 142), (206, 170, 216), (240, 226, 244)),
 }
 X_RANG, X_VEREIN, X_VERBAND, X_TOTAL, X_AUSZ = 79.0, 102.8, 312.6, 420.4, 468.5
 WERT_ABSTAND = 45.4
@@ -57,6 +58,8 @@ def datum_lang(iso):
 
 def kopfzeile_standard(wettkampf, jugend):
     jahr = (wettkampf["datum"] or "")[:4]
+    if jugend == "jet":
+        return "WTU Jugendeinzelturntag JET " + jahr
     return ("WTU Jugend Turn-, Spiel- und Stafettentag " if jugend
             else "WTU Turn-, Spiel- und Stafettentag ") + jahr
 
@@ -80,9 +83,30 @@ def total_text(wert, einheit, stafette):
 
 
 def _titel(kat):
-    """Disziplin ohne Sparte: 'Ballwurf Mädchen Kat. A, …' -> 'Ballwurf Kat. A, …'."""
+    """Disziplin ohne Sparte: 'Ballwurf Mädchen Kat. A, …' -> 'Ballwurf Kat. A, …';
+    JET: 'Mädchen Kategorie A, …' (Sparte 'JET Mädchen') -> 'Kategorie A, …'."""
     bez, sparte = kat["bezeichnung"], kat["sparte"] or ""
+    if sparte.startswith("JET ") and bez.startswith(sparte[4:] + " "):
+        return bez[len(sparte) - 3:]
     return bez.replace(f" {sparte} ", " ", 1) if sparte else bez
+
+
+def _jet_werte(e, daten):
+    """JET-Einzelresultate einer Zeile: 'BO 9.60   80 10.81 (10.00)   …' (gestrichene in Klammern)."""
+    teile = []
+    werte = e.get("werte") or []
+    for i, n in enumerate(e.get("noten") or []):
+        if n is None:
+            continue
+        abk = daten["disziplinen"][i]["abk"]
+        w = werte[i] if i < len(werte) else None
+        note = "6.00" if i in e.get("falsch", ()) else f"{n:.2f}"
+        if w is None or f"{w:.2f}" == f"{n:.2f}":
+            txt = f"{abk} {note}"
+        else:
+            txt = f"{abk} {_zeit(w) if abk in ('80', 'KL') else f'{w:g}'} ({note})"
+        teile.append(f"[{txt}]" if i in e.get("gestrichen", ()) else txt)
+    return "   ".join(teile)
 
 
 def _name(e):
@@ -132,7 +156,8 @@ class _Seiten:
         einheit = daten.get("einheit") or kat["einheit"] or ""
         stafette = daten.get("modus") == "stafette"
         nur_rang = einheit == "Rang"               # Seilziehen: Cup-Rang, kein Total
-        werte_zeigen = einzelwerte and not stafette and not nur_rang and mitglieder > 1
+        jet = daten.get("berechnung") == "jet"
+        werte_zeigen = jet or (einzelwerte and not stafette and not nur_rang and mitglieder > 1)
         zeilen = [(e, "") for e in daten["eintraege"] if e.get("total") is not None or e.get("rang")]
         zeilen += [(e, VERMERK_DEBRA.get(e.get("status"), e.get("status_kurz", "")))
                    for e in daten.get("sonder", [])]
@@ -151,12 +176,15 @@ class _Seiten:
                 y += 28
             self.rechteck(y, 20, self.disz)
             self.text(LINKS + 0.5, y + 14.2, _titel(kat), "Helvetica", 14)
-            self.text(RECHTS - 0.7, y + 9.8, f"Total  {anzahl} Vereine", "Helvetica-Bold", 10, rechts=True)
+            self.text(RECHTS - 0.7, y + 9.8, f"Total  {anzahl} {'Teilnehmer' if jet else 'Vereine'}",
+                      "Helvetica-Bold", 10, rechts=True)
             self.text(60.4, y + 33.5, "Rang", "Helvetica-Bold")
-            self.text(X_VEREIN, y + 33.5, "Verein", "Helvetica-Bold")
+            self.text(X_VEREIN, y + 33.5, "Name, Vorname" if jet else "Verein", "Helvetica-Bold")
+            if jet:
+                self.text(X_VERBAND, y + 33.5, "Verein", "Helvetica-Bold")
             if not nur_rang:
                 self.text(X_TOTAL, y + 33.5, "Total", "Helvetica-Bold")
-            if mit_werten:
+            if mit_werten and not jet:
                 for i in range(mitglieder):
                     self.text(X_VEREIN + i * WERT_ABSTAND - 0.3, y + 46.8, f"{i + 1}. Tu/Ti", size=7)
                 y += 54
@@ -187,15 +215,23 @@ class _Seiten:
                     self.rechteck(y + 1.6, 14.2, self.streifen)
             if e.get("rang") and not vermerk:
                 self.text(X_RANG, y + 10.8, f"{e['rang']}.", "Helvetica-Bold", rechts=True)
-            self.text(X_VEREIN, y + 10.8, _name(e), "Helvetica-Bold")
-            self.text(X_VERBAND, y + 10.4, e.get("verband") or "")
+            if jet:
+                self.text(X_VEREIN, y + 10.8, f"{e.get('nachname', '')} {e.get('vorname', '')}".strip(),
+                          "Helvetica-Bold")
+                self.text(X_VERBAND, y + 10.4, f"{e.get('verein_zusatz') or ''} {e.get('verein') or ''}".strip()
+                          + (f"  {e['jahrgang']}" if e.get("jahrgang") else ""), size=9)
+            else:
+                self.text(X_VEREIN, y + 10.8, _name(e), "Helvetica-Bold")
+                self.text(X_VERBAND, y + 10.4, e.get("verband") or "")
             if not nur_rang:
                 self.text(X_TOTAL, y + 10.8, total_text(e.get("total"), einheit, stafette), "Helvetica-Bold")
             if vermerk:
                 self.text(X_AUSZ, y + 10.8, vermerk)
             elif e.get("marker"):
                 self.text(X_AUSZ, y + 10.8, e["marker"], "Helvetica-Bold")
-            if werte:
+            if werte and jet:
+                self.text(X_VEREIN, y + 21.6, _jet_werte(e, daten), size=7)
+            elif werte:
                 for i, w in enumerate((e.get("noten") or [])[:mitglieder]):
                     s = "-" if w is None else (_zeit(w) if einheit == "s" else f"{w:.2f}")
                     self.text(X_VEREIN + i * WERT_ABSTAND, y + 21.6, s, size=7)
@@ -239,6 +275,7 @@ def _schriften():
 MODERN = {
     "tsst": (HexColor("#556B0B"), HexColor("#3E4F05")),
     "jtsst": (HexColor("#0F6378"), HexColor("#0A4756")),
+    "jet": (HexColor("#7A2E8E"), HexColor("#5A1F69")),
 }
 TINTE, GRAU, LINIE, ZEBRA = HexColor("#111827"), HexColor("#374151"), HexColor("#9CA3AF"), HexColor("#EDEFF2")
 VERMERK_FARBE = HexColor("#4B5563")
@@ -323,7 +360,8 @@ class _ModernSeiten:
         einheit = daten.get("einheit") or kat["einheit"] or ""
         stafette = daten.get("modus") == "stafette"
         nur_rang = einheit == "Rang"
-        werte_zeigen = einzelwerte and not stafette and not nur_rang and mitglieder > 1
+        jet = daten.get("berechnung") == "jet"
+        werte_zeigen = jet or (einzelwerte and not stafette and not nur_rang and mitglieder > 1)
         rangiert = [e for e in daten["eintraege"] if e.get("total") is not None or e.get("rang")]
         offen = [e for e in daten["eintraege"] if e.get("total") is None and not e.get("rang")]
         sonder = daten.get("sonder", [])
@@ -370,7 +408,9 @@ class _ModernSeiten:
         seiten.append(aktuell)
 
         # 3) Zeichnen
-        if werte_zeigen:
+        if jet:
+            beschreibung = "Summe der Noten · Wert (Note) je Disziplin"
+        elif werte_zeigen:
             beschreibung = f"Durchschnitt aus {mitglieder} Leistungen"
         elif stafette:
             beschreibung = "Teamzeit"
@@ -387,7 +427,7 @@ class _ModernSeiten:
                     self.linie(block - 6, LINIE, 0.6)        # Trennlinie zur vorherigen Disziplin
                 self.etikett(M_L, block + 18, (kat["sparte"] or "").upper(), self.akzent, white, 7.5)
                 self.text(M_L, block + 50, titel, "b", 24, TINTE)
-                info = [f"{anzahl} Gruppen"]
+                info = [f"{anzahl} {'Teilnehmende' if jet else 'Gruppen'}"]
                 if grenze:
                     info.append(f"{grenze} Auszeichnungen")
                 if beschreibung:
@@ -400,8 +440,8 @@ class _ModernSeiten:
                 y = 76.0
             # Tabellenkopf
             self.text(M_RANG, y + 14, "RANG", "b", 7, TINTE, "c", 0.7)
-            self.text(M_NAME, y + 14, "VEREIN", "b", 7, TINTE, sperrung=0.7)
-            self.text(M_VERBAND, y + 14, "VERBAND", "b", 7, TINTE, sperrung=0.7)
+            self.text(M_NAME, y + 14, "NAME" if jet else "VEREIN", "b", 7, TINTE, sperrung=0.7)
+            self.text(M_VERBAND, y + 14, "JG. · VEREIN" if jet else "VERBAND", "b", 7, TINTE, sperrung=0.7)
             if not nur_rang:
                 self.text(M_TOTAL, y + 14, "TOTAL", "b", 7, TINTE, "r", 0.7)
             self.linie(y + 22, TINTE, 0.8)
@@ -445,7 +485,11 @@ class _ModernSeiten:
                 if daten.get("hat_final") and runde in ("A-Final", "B-Final", "Final") and art == "zeile":
                     self.etikett(M_NAME + self.breite(name, "s", 10.5) + 6, mitte - 1, runde.upper(),
                                  self.akzent, white, 6)
-                self.text(M_VERBAND, mitte, e.get("verband") or "", "m", 8.8, GRAU)
+                if jet:
+                    self.text(M_VERBAND, mitte, f"{e.get('jahrgang') or ''}  {e.get('verein_zusatz') or ''} "
+                              f"{e.get('verein') or ''}".strip(), "m", 8.8, GRAU)
+                else:
+                    self.text(M_VERBAND, mitte, e.get("verband") or "", "m", 8.8, GRAU)
                 # Total
                 if not nur_rang:
                     tot = total_text(e.get("total"), einheit, stafette)
@@ -457,7 +501,9 @@ class _ModernSeiten:
                     elif art == "zeile":
                         self.text(M_TOTAL, mitte, "–", "r", 10, GRAU, "r")
                 # Einzelresultate, bestes hervorgehoben
-                if werte_zeigen and art == "zeile":
+                if jet and art == "zeile":
+                    self.text(M_NAME, y + 22, _jet_werte(e, daten), "m", 7.4, GRAU)
+                elif werte_zeigen and art == "zeile":
                     werte = (e.get("noten") or [])[:mitglieder]
                     for i, w in enumerate(werte):
                         s = "–" if w is None else (_zeit(w) if einheit == "s" else f"{w:.2f}")
@@ -638,6 +684,9 @@ def vereinsblatt_pdf(conn, wettkampf, verein=None):
 
 
 def _anlass(conn, wettkampf_id):
+    if conn.execute("SELECT 1 FROM kategorie WHERE wettkampf_id=? AND sparte LIKE 'JET %' LIMIT 1",
+                    (wettkampf_id,)).fetchone():
+        return "jet"
     jugend = conn.execute("SELECT 1 FROM kategorie WHERE wettkampf_id=? AND sparte IN ('Knaben','Mädchen') "
                           "LIMIT 1", (wettkampf_id,)).fetchone() is not None
     return "jtsst" if jugend else "tsst"
@@ -653,7 +702,7 @@ def einstellungen(conn, wettkampf):
         return r["wert"] if r and r["wert"] is not None else standard
 
     return {"art": art,
-            "kopfzeile": wert("rl_kopf", kopfzeile_standard(wettkampf, art == "jtsst")),
+            "kopfzeile": wert("rl_kopf", kopfzeile_standard(wettkampf, "jet" if art == "jet" else art == "jtsst")),
             "einzelwerte": wert("rl_einzelwerte", "1" if art == "tsst" else "0") == "1",
             "design": wert("rl_design", "modern")}
 

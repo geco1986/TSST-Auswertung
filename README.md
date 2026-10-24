@@ -2,12 +2,14 @@
 
 Webbasierte Auswertungs-Software für den **Turn-, Spiel- und Stafettentag (TSST)**
 des ZTV-WTU – ein Nachbau der früheren MS-Access-Lösung „DEBRA" als
-Flask-/SQLite-Webapp. Deckt **Turner und Turnerinnen** ab: Erfassung, Wertung
+Flask-/SQLite-Webapp. Drei Anlässe, oben rechts umschaltbar und für die Eingabe klar
+getrennt: **TSST** (Turner/Turnerinnen), **JTSST** (Jugend, Gruppen) und **JET**
+(Jugend-Einzelturntag). Für den TSST: Erfassung, Wertung
 nach den Wettkampfbestimmungen, Stafetten mit Vor-/Finalläufen, Ranglisten,
 Listen und Notenblätter – im Netzwerk von mehreren PCs gleichzeitig nutzbar.
 
-> Sprache der Oberfläche: **Deutsch**. Beim Login wird nur eine **Rolle**
-> (Eingeber/Chef) und eine **Kennung/Station** gewählt – kein Passwort.
+> Sprache der Oberfläche: **Deutsch**. Beim Login wird eine **Rolle**
+> (Eingeber/Chef/Superuser) und eine **Kennung/Station** gewählt – nur der Superuser hat ein Passwort.
 
 ## Funktionen (Überblick)
 - **Erfassung**: Schnellerfassung über alle Startnummern, Raster je Disziplin,
@@ -28,6 +30,9 @@ Listen und Notenblätter – im Netzwerk von mehreren PCs gleichzeitig nutzbar.
   Vereins-Parallelität.
 - **Import**: DEBRA-Text-Backup, Anmeldungen aus Excel (mit Prüfschritt),
   Vorjahres-Rangliste.
+- **JET**: Erfassung je Kategorie/Riege/Posten/Startnummer, Noten über die pflegbare
+  Wertungstabelle (WKB Kap. 5), Streichresultat und „falsche Disziplin“ nach WKB, Import aus
+  DEBRA-Backup, Anmelde-Excel oder Startliste-PDF (`python -m debra.jet import [Ordner]`).
 - **Betrieb**: SQLite im WAL-Modus (Mehrplatz), Rollen, automatische DB-Migration.
 
 ## Schnellstart (lokal, ohne Docker)
@@ -77,6 +82,8 @@ Das GHCR-Paket muss dafür **öffentlich** sein (siehe TRUENAS.md).
 
 ## Echte Daten laden
 In der App unter **Einstellungen**:
+- **Anmeldungen aus Excel (Ordner)**: TSST-Anmeldezahlen und JTSST-Gesamtübersicht
+  gemeinsam aus `Inputs\Import` – mit Prüfschritt und automatischer DB-Sicherung.
 - **Excel-Import** der Anmeldungen (Blätter TU/TI), mit Spaltenzuordnung + Prüfung.
 - **DEBRA-Backup importieren** (Text-Export der Access-Software), anschliessend
   **WKB anwenden** und **Vorjahr importieren**.
@@ -86,18 +93,22 @@ Per Kommandozeile (im Container z. B. via `docker exec`):
 python -m debra.import_backup /pfad/zum/Backup
 python -m debra.wkb
 python -m debra.vorjahr
+python -m debra.excel_import Inputs/Import --ja   # Anmeldungen TSST + JTSST
 ```
 
 ## Rollen
 - **Eingeber**: Teilnehmer/Resultate erfassen und mutieren, Kontrollblatt.
 - **Chef**: zusätzlich Ranglisten, Korrektur, Stafetten-Selektion & Bahnen,
   Einsatzplan, Listen, Einstellungen, Stammdaten, Änderungs-Log.
+  Bearbeitet nur den aktiv gesetzten Anlass.
+- **Superuser** (Passwort, beim ersten Login festlegen): wählt den aktiven Anlass,
+  verwaltet Wettkämpfe, führt alle Importe durch und pflegt die JET-Wertungsformeln.
 
 ## Projektstruktur
 ```
 app.py            Flask-App (Routen)
 serve.py          Produktions-Start (waitress) – Container-Entrypoint
-debra/            Kernmodule: db, scoring, wkb, import_backup, excel_import, vorjahr, seed
+debra/            Kernmodule: db, scoring, wkb, jtsst, jet, import_backup, excel_import, vorjahr, seed
 templates/        Jinja2-Templates (inkl. Druckvorlagen)
 static/style.css  Design
 Dockerfile, docker-compose.yml, .github/workflows/docker-image.yml

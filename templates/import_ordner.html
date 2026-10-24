@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Anmeldungen prüfen{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Anmeldungen prüfen</h1>
+  <p class="sub">Ordner <span class="mono">{{ ordner }}</span> – noch nichts gespeichert</p></div></div>
+
+{% if pruefung.fehler %}
+  <div class="flashes">{% for f in pruefung.fehler %}<div class="flash error">{{ f }}</div>{% endfor %}</div>
+{% endif %}
+{% if pruefung.dateien.andere %}
+  <p class="muted" style="font-size:13px;">Nicht erkannt und ignoriert: {{ pruefung.dateien.andere|join(', ') }}</p>
+{% endif %}
+
+<div class="grid-2" style="align-items:start;">
+{% for s in pruefung.sparten %}
+  <div class="card">
+    <h3 style="margin-top:0;">{{ s.anlass }} · {{ s.sparte }}
+      <span class="muted" style="font-weight:400;">· {{ s.vereine }} Vereine · {{ s.gruppen }} Gruppen</span></h3>
+    <p class="muted" style="font-size:13px;margin-top:0;">{{ s.datei }}</p>
+    {% for w in s.warnungen %}<div class="flash error" style="margin-bottom:8px;">{{ w }}</div>{% endfor %}
+    <div class="table-wrap" style="border:none;">
+      <table>
+        <thead><tr>{% if s.anlass == 'TSST' %}<th>Excel-Spalte</th>{% endif %}<th>Disziplin</th>
+          <th style="text-align:right;">Gruppen</th><th style="text-align:right;">Total Excel</th></tr></thead>
+        <tbody>
+        {% for d in s.disziplinen %}
+          <tr>
+            {% if s.anlass == 'TSST' %}<td><strong>{{ d.name }}</strong></td>{% endif %}
+            <td>{{ d.kat or '— nicht zugeordnet —' }}</td>
+            <td style="text-align:right;">{{ d.n }}</td>
+            <td style="text-align:right;">{{ d.total if d.total is not none else '–' }}
+              {% if d.total is not none and d.total != d.n %} ⚠{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endfor %}
+</div>
+
+{% if not pruefung.fehler %}
+<form method="post" action="{{ url_for('import_ordner_uebernehmen') }}" class="card" style="margin-top:16px;">
+  <input type="hidden" name="ordner" value="{{ ordner }}">
+  <p style="margin-top:0;">Ersetzt <strong>{{ pruefung.bestehend.anmeldungen }}</strong> bestehende Anmeldungen
+    {%- if pruefung.bestehend.resultate %} – <strong style="color:#a4161d;">davon mit {{ pruefung.bestehend.resultate }}
+    erfassten Resultaten, die verloren gehen</strong>{% endif %}.
+    Vorher wird die Datenbank gesichert.</p>
+  <p class="muted" style="font-size:13px;">Startnummern je Sparte fortlaufend (Turner ab 1, Turnerinnen ab 501,
+    Knaben ab 1001, Mädchen ab 2001), Vereine alphabetisch. Die Gruppenzahlen gelten als Anmeldestand bei
+    Meldeschluss (Basis der Auszeichnungen).</p>
+  <div class="btn-row">
+    <button class="btn primary" type="submit"
+            onclick="return confirm('Anmeldungen jetzt importieren und bestehende ersetzen?')">Importieren</button>
+    <a class="btn ghost" href="{{ url_for('einstellungen') }}">Abbrechen</a>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

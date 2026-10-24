@@ -37,21 +37,20 @@
     <div class="card empty"><p>Keine offenen Eingaben für diese Kennung.</p></div>
   {% endif %}
   {% for b in bloecke %}
-    <h2 style="font-size:16px;margin:16px 0 6px;">{{ b.kat.bezeichnung }}</h2>
+    <h2 style="font-size:16px;margin:16px 0 6px;">{% if b.kat.sparte and b.kat.sparte.split()[-1] not in b.kat.bezeichnung %}{{ b.kat.sparte }} · {% endif %}{{ b.kat.bezeichnung }}</h2>
     <div class="table-wrap">
       <table>
         <thead><tr>
           <th style="width:30px;" class="no-print"></th>
-          <th class="num">Start</th><th>Verein / Gruppe</th>
-          {% for p in b.positionen %}<th class="num">{{ loop.index }}</th>{% endfor %}
+          <th class="num">Start-Nr.</th>
+          {% for h in b.kopf %}<th class="num">{{ h }}</th>{% endfor %}
           <th style="width:40px;">✓</th>
         </tr></thead>
         <tbody>
         {% for e in b.eintraege %}
           <tr>
             <td class="no-print"><input type="checkbox" name="sel" value="{{ e.t.id }}"></td>
-            <td class="num mono">{{ e.t.startnr }}</td>
-            <td><strong>{{ e.t.verein_name or '—' }}</strong>{% if e.t.verein_zusatz %} {{ e.t.verein_zusatz }}{% endif %}{% if e.t.gruppennr %} ({{ e.t.gruppennr }}){% endif %}</td>
+            <td class="num mono"><strong>{{ e.t.startnr }}</strong></td>
             {% for w in e.werte %}<td class="num mono">{{ w }}</td>{% endfor %}
             <td>{% if e.t.kontrolliert_am %}<span class="kranz">✓</span>{% else %}<span style="display:inline-block;width:16px;height:16px;border:1px solid #999;"></span>{% endif %}</td>
           </tr>

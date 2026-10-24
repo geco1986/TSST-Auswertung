@@ -14,6 +14,30 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.environ.get("DEBRA_DB", os.path.join(BASE_DIR, "debra.sqlite3"))
 
 
+def pfad_finden(pfad):
+    """Vorhandenen Pfad ohne Rücksicht auf Gross-/Kleinschreibung finden (Linux-Container:
+    'Inputs/jet' findet auch 'Inputs/JET'). Gibt den Pfad unverändert zurück, wenn nichts passt."""
+    if not pfad or os.path.exists(pfad):
+        return pfad
+    teile = os.path.normpath(pfad).split(os.sep)
+    aktuell = os.sep if os.path.isabs(pfad) and os.sep == "/" else ""
+    if teile and teile[0] == "":
+        teile = teile[1:]
+    for i, teil in enumerate(teile):
+        kandidat = os.path.join(aktuell, teil) if aktuell else teil
+        if not os.path.exists(kandidat):
+            basis = aktuell or "."
+            try:
+                treffer = [n for n in os.listdir(basis) if n.lower() == teil.lower()]
+            except OSError:
+                return pfad
+            if not treffer:
+                return pfad
+            kandidat = os.path.join(aktuell, treffer[0]) if aktuell else treffer[0]
+        aktuell = kandidat
+    return aktuell
+
+
 def get_db():
     """Verbindung mit aktivierten Fremdschlüsseln und Zeilen als dict-artige Rows."""
     conn = sqlite3.connect(DB_PATH, timeout=15)
@@ -216,6 +240,27 @@ CREATE TABLE IF NOT EXISTS zusatzblatt (
     position      TEXT NOT NULL DEFAULT 'ende',
     sortierung    INTEGER NOT NULL DEFAULT 0,  -- Reihenfolge mehrerer Blätter an derselben Stelle
     aktiv         INTEGER NOT NULL DEFAULT 1
+);
+
+-- JET-Wertungstabelle (WKB Kapitel 5): Messwert -> Note je Geschlecht, Disziplin und Kategorie.
+-- Zwischen zwei Zeilen wird linear interpoliert (siehe debra/jet.py).
+CREATE TABLE IF NOT EXISTS jet_tabelle (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    geschlecht  TEXT NOT NULL,     -- m | w
+    disziplin   TEXT NOT NULL,     -- Kürzel: 80, HO, WE, KUG, MHO, STB, KL
+    kat         TEXT NOT NULL,     -- A..E
+    wert        REAL NOT NULL,
+    note        REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_jet_tab ON jet_tabelle(geschlecht, disziplin, kat);
+
+-- JET-Formel je Geschlecht, Disziplin und Kategorie (x = Messwert); erzeugt jet_tabelle.
+CREATE TABLE IF NOT EXISTS jet_formel (
+    geschlecht  TEXT NOT NULL,
+    disziplin   TEXT NOT NULL,
+    kat         TEXT NOT NULL,
+    formel      TEXT NOT NULL,
+    PRIMARY KEY (geschlecht, disziplin, kat)
 );
 
 -- Einstellungen (tabPCSettings) – Schlüssel/Wert.

@@ -5,7 +5,8 @@
 <div class="page-head">
   <div><h1>{{ kat.bezeichnung }}</h1>
     <p class="sub">Rangliste ·
-      {% if daten.berechnung == 'durchschnitt' %}Durchschnitt aller {{ daten.anzahl_werte }} Leistungen{% if daten.einheit %} ({{ daten.einheit }}){% endif %}
+      {% if daten.berechnung == 'jet' %}Summe der Noten ({{ kat.bezeichnung.split(', ')[-1] }}), zu viel geturnte Disziplin: beste gestrichen
+      {% elif daten.berechnung == 'durchschnitt' %}Durchschnitt aller {{ daten.anzahl_werte }} Leistungen{% if daten.einheit %} ({{ daten.einheit }}){% endif %}
       {% elif daten.anzahl_werte == 1 %}Teamzeit{% if daten.einheit %} ({{ daten.einheit }}){% endif %}
       {% else %}Summe{% if kat.streich %}, {{ kat.streich }} Streichresultat(e){% endif %}{% endif %} ·
       {% if daten.richtung == 'tief' %}tiefer = besser{% else %}höher = besser{% endif %} ·
@@ -24,13 +25,33 @@
 <div class="card" style="margin-bottom:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
   <strong style="font-size:13px;">Status:</strong>
   {% macro sbadge(ok, txt) %}<span class="pill" style="{{ 'background:#e5f4ea;color:#1a6e3d;font-weight:bold' if ok else 'opacity:.6' }}">{{ '✓ ' if ok }}{{ txt }}</span>{% endmacro %}
-  {{ sbadge(rl_status.eingegeben, 'Alles eingegeben') }}
-  {{ sbadge(rl_status.kontrolliert, 'Eingabe kontrolliert') }}
+  {{ sbadge(rl_status.eingegeben, 'Alles eingegeben' if rl_status.eingegeben else rl_status.offen ~ ' ohne Eintrag') }}
+  {% if rl_status.kontrolliert is not none %}{{ sbadge(rl_status.kontrolliert, 'Eingabe kontrolliert') }}{% endif %}
   {{ sbadge(rl_status.gedruckt, 'Gedruckt') }}
   {{ sbadge(rl_status.fertig, 'Fertig (WKL)') }}
   <div class="spacer"></div>
   <form method="post" action="{{ url_for('rangliste_status', kid=kat.id) }}" style="display:inline">
-    <input type="hidden" name="feld" value="gedruckt"><button class="btn sm" type="submit">Als gedruckt markieren</button></form>
+    <input type="hidden" name="feld" value="gedruckt">
+    {% if rl_status.gedruckt %}<button class="btn sm" type="submit">Markierung „gedruckt“ entfernen</button>
+    {% else %}<button class="btn sm" type="submit"
+       {% if not rl_status.eingegeben %}onclick="return gedrucktWarnung()"{% endif %}>Als gedruckt markieren</button>{% endif %}</form>
+  {% if not rl_status.eingegeben %}
+  <script>
+  function gedrucktWarnung(){
+    var namen = {{ rl_status.offen_liste|map('join', ' ')|list|tojson }};
+    var rest = {{ rl_status.offen }} - namen.length;
+    alert('Die Rangliste kann noch nicht als gedruckt markiert werden.
+
+'
+      + {{ rl_status.offen }} + ' Teilnehmende haben weder ein Resultat noch einen Vermerk:
+'
+      + namen.join('
+') + (rest > 0 ? '
+… und ' + rest + ' weitere' : ''));
+    return false;
+  }
+  </script>
+  {% endif %}
   <form method="post" action="{{ url_for('rangliste_status', kid=kat.id) }}" style="display:inline">
     <input type="hidden" name="feld" value="fertig"><button class="btn sm {{ 'primary' if not rl_status.fertig }}" type="submit">{{ 'WKL-Freigabe zurücknehmen' if rl_status.fertig else 'Fertig (WKL) freigeben' }}</button></form>
 </div>
@@ -72,6 +93,58 @@
       {% for e in daten.sonder %}
         <tr><td><strong>{{ e.anzeige }}</strong></td>
           <td class="num total">{{ fmt_zeit(e.total) }}</td>
+          <td><span class="pill">{{ e.status_label }}</span>{% if e.bemerkung %} <span class="muted">{{ e.bemerkung }}</span>{% endif %}</td></tr>
+      {% endfor %}
+      </tbody></table></div>
+  {% endif %}
+
+{% elif daten.berechnung == 'jet' %}
+  {# JET: Einzelturnende mit frei gewählten Disziplinen – Wert (Note) je Disziplin #}
+  {% set abk = daten.disziplinen|map(attribute='abk')|list %}
+  {% macro jet_werte(e) -%}
+    <div class="jet-werte">
+    {%- for n in e.noten -%}
+      {%- if n is not none -%}
+        {%- set w = e.werte[loop.index0] -%}
+        <span class="w {{ 'gestrichen' if loop.index0 in e.gestrichen }}" title="{{ daten.disziplinen[loop.index0].bezeichnung }}">{{ abk[loop.index0] }}
+          <b>{% if w is not none and '%.2f'|format(w) != '%.2f'|format(n) %}{{ fmt_zeit(w) if daten.disziplinen[loop.index0].abk in ('80','KL') else ('%g'|format(w)) }} ({{ '6.00' if loop.index0 in e.falsch else '%.2f'|format(n) }}){% else %}{{ '6.00' if loop.index0 in e.falsch else '%.2f'|format(n) }}{% endif %}</b></span>
+      {%- endif -%}
+    {%- endfor -%}
+    </div>
+  {%- endmacro %}
+  {% if not daten.eintraege %}
+    <div class="card empty"><p>Noch keine Resultate in dieser Kategorie erfasst.</p></div>
+  {% else %}
+  <div class="table-wrap">
+    <table class="sortable">
+      <thead><tr><th class="num">Rang</th><th>Name</th><th class="num">Jg.</th><th>Verein</th>
+        <th class="no-sort">Disziplinen: Wert (Note)</th><th class="num">Total</th><th class="no-sort">Ausz.</th></tr></thead>
+      <tbody>
+      {% for e in daten.eintraege %}
+        <tr class="{{ 'rang-1' if e.rang==1 }}{{ ' rang-2' if e.rang==2 }}{{ ' rang-3' if e.rang==3 }}">
+          <td class="num" data-sort="{{ e.rang if e.rang else 99999 }}">{% if e.rang %}<span class="rangnr">{{ e.rang }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+          <td><strong>{{ e.nachname }}</strong> {{ e.vorname }}
+            {% if e.hinweise %}<div class="muted" style="font-size:11px; color:var(--rot-d);">{{ e.hinweise|join(' · ') }}</div>{% endif %}</td>
+          <td class="num">{{ e.jahrgang or '' }}</td>
+          <td>{{ e.verein_zusatz }} {{ e.verein }}</td>
+          <td>{{ jet_werte(e) }}</td>
+          <td class="num total" data-sort="{{ e.total if e.total is not none else -1 }}">{{ '%.2f'|format(e.total) if e.total is not none else '–' }}</td>
+          <td>{% if e.marker %}<span class="kranz" title="Auszeichnung">{{ e.marker }}</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if daten.sonder %}
+    <h2 style="font-size:16px; margin:22px 0 8px;">Vermerke (nicht gewertet)</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Name</th><th>Verein</th><th>Disziplinen</th><th class="num">Total</th><th>Vermerk</th></tr></thead>
+      <tbody>
+      {% for e in daten.sonder %}
+        <tr><td><strong>{{ e.nachname }}</strong> {{ e.vorname }}</td><td>{{ e.verein_zusatz }} {{ e.verein }}</td>
+          <td>{{ jet_werte(e) }}</td>
+          <td class="num total">{{ '%.2f'|format(e.total) if e.total is not none else '–' }}</td>
           <td><span class="pill">{{ e.status_label }}</span>{% if e.bemerkung %} <span class="muted">{{ e.bemerkung }}</span>{% endif %}</td></tr>
       {% endfor %}
       </tbody></table></div>

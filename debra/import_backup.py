@@ -14,8 +14,8 @@ DEBRA-Kodierung (geprüft am Final-Backup TSST 2026):
   - Stafetten: ein Wert = Zeit; 4x100m: Rang 1–8 A-Final, 9–16 B-Final (Turner),
     Total ist bei Finalisten die Finalzeit
 
-Jugend-Sparten (Knaben/Mädchen) werden übersprungen: der Jugendwettkampf wird
-über den JTSST-Import gepflegt und bleibt beim Backup-Import unangetastet.
+Jugend-Sparten (Knaben/Mädchen, Jugendwettkampf Knaben/Mädchen) werden übersprungen:
+JTSST und JET werden über ihren eigenen Import gepflegt und bleiben unangetastet.
 
 Aufruf:  python -m debra.import_backup /pfad/zum/Backup
 """
@@ -32,7 +32,7 @@ SPARTE_TITEL = {
     "Turner": "Leichtathletik – Turner",
     "Turnerinnen": "Leichtathletik – Turnerinnen",
 }
-JUGEND = ("Knaben", "Mädchen")
+JUGEND = ("Knaben", "Mädchen", "Jugendwettkampf Knaben", "Jugendwettkampf Mädchen")
 
 # Bemerkung in WR -> Vermerk der Web-App
 BEMERKUNG_STATUS = {"ak": "ak", "nges": "nges", "aufg": "aufg", "disq": "disq", "unfall": "unfall"}
@@ -99,6 +99,7 @@ def importieren(backup_dir, reset=True):
         else:
             raise FileNotFoundError(f"Ordner nicht gefunden: {backup_dir}")
 
+    from .jet import EVENT_NAME as JET_NAME
     from .jtsst import EVENT_NAME as JTSST_NAME
     from .wkb import ist_stafette
 
@@ -110,7 +111,10 @@ def importieren(backup_dir, reset=True):
         # Alles ausser dem Jugendwettkampf ersetzen (Kategorien, Gruppen, Resultate
         # und Zeitplan hängen per ON DELETE CASCADE am Wettkampf). Vereine bleiben,
         # weil die JTSST-Gruppen auf sie verweisen.
-        cur.execute("DELETE FROM wettkampf WHERE name<>?", (JTSST_NAME,))
+        # Der JET (eigener Anlass) bleibt ebenfalls erhalten.
+        cur.execute("DELETE FROM wettkampf WHERE name<>? AND name<>? AND id NOT IN "
+                    "(SELECT wettkampf_id FROM kategorie WHERE sparte LIKE 'JET %')",
+                    (JTSST_NAME, JET_NAME))
         cur.execute("DELETE FROM disziplin WHERE id NOT IN "
                     "(SELECT DISTINCT disziplin_id FROM kategorie_disziplin)")
 

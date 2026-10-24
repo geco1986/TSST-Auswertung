@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}JET-Wertungstabelle{% endblock %}
+{% block content %}
+{% set D = jet.DISZIPLINEN %}
+{% set einheit = D[disz][2] %}
+<div class="page-head">
+  <div><h1>JET · Wertungsformeln</h1>
+    <p class="sub">Je Disziplin und Kategorie eine Formel (x = Messwert). Beim Speichern wird daraus die
+      Wertungstabelle erzeugt, mit der die Noten berechnet werden (Note 6.00–10.00).</p></div>
+  <div class="spacer"></div>
+  <a class="btn" href="{{ url_for('jet_erfassung') }}">Zur Erfassung</a>
+</div>
+
+<div class="card" style="margin-bottom:14px;">
+  <div class="btn-row">
+    <strong style="min-width:80px;">Sparte</strong>
+    <a class="btn sm {{ 'primary' if gesch == 'w' }}" href="{{ url_for('jet_wertungstabelle', g='w', d=disz) }}">Mädchen</a>
+    <a class="btn sm {{ 'primary' if gesch == 'm' }}" href="{{ url_for('jet_wertungstabelle', g='m', d=disz) }}">Knaben</a>
+  </div>
+  <div class="btn-row" style="margin-top:10px;">
+    <strong style="min-width:80px;">Disziplin</strong>
+    {% for a in jet.TABELLEN_DISZ %}
+      <a class="btn sm {{ 'primary' if disz == a }}" href="{{ url_for('jet_wertungstabelle', g=gesch, d=a) }}">{{ D[a][0] }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="grid-2" style="grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr); align-items:start;">
+<div>
+  <form method="post" class="card" style="margin-bottom:14px;">
+    <input type="hidden" name="aktion" value="speichern">
+    <input type="hidden" name="g" value="{{ gesch }}"><input type="hidden" name="d" value="{{ disz }}">
+    <h3 style="margin-top:0;">{{ D[disz][0] }} · {{ 'Mädchen' if gesch == 'w' else 'Knaben' }}
+      <span class="muted" style="font-weight:400;">· x in {{ einheit }} · {{ 'tiefer' if D[disz][3] == 'tief' else 'höher' }} = besser</span></h3>
+    <table class="jet-formeln">
+      <thead><tr><th>Kategorie</th><th>Note =</th><th></th></tr></thead>
+      <tbody>
+      {% for k, (alter, n, _, _) in jet.KATEGORIEN.items() %}
+        <tr>
+          <td><strong>Kat. {{ k }}</strong> <span class="muted">{{ alter }}</span></td>
+          <td><input type="text" name="f_{{ k }}" value="{{ formeln[k] }}" class="mono formel" data-k="{{ k }}"
+                     autocomplete="off" spellcheck="false"></td>
+          <td>{% if gespeichert[k] != standard[k] %}<span class="pill" title="Standard: {{ standard[k] }}">angepasst</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="font-size:12px;">Erlaubt: Zahlen, <span class="mono">x</span>, <span class="mono">+ - * /</span>,
+      Potenz <span class="mono">^</span> (oder <span class="mono">**</span>) und Klammern; DEBRA-Schreibweise
+      <span class="mono">[WT]</span> geht auch. Beispiel: <span class="mono">4*x+4</span>, <span class="mono">21-x</span>,
+      <span class="mono">-3.596*x^0.415+16.5</span>. Wert 0 (kein gültiger Versuch) ergibt immer Note 6.</p>
+    <div class="savebar">
+      <button class="btn primary" type="submit">Formeln speichern und Tabelle erzeugen</button>
+      <span class="note">Bereits erfasste Noten werden danach neu berechnet.</span>
+    </div>
+  </form>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Erzeugte Wertungstabelle <span class="muted" style="font-weight:400;">(nur Anzeige)</span></h3>
+    <div class="table-wrap" style="max-height:52vh;">
+      <table>
+        <thead><tr><th class="num">Note</th>
+          {% for k in jet.KATEGORIEN %}<th class="num">Kat. {{ k }}</th>{% endfor %}</tr></thead>
+        <tbody>
+        {% for z in raster %}
+          <tr><td class="num"><strong>{{ '%.2f'|format(z.note) }}</strong></td>
+            {% for k in jet.KATEGORIEN %}
+              <td class="num mono">{% if z[k] is not none %}{{ fmt_zeit(z[k]) if einheit == 's' else ('%.2f'|format(z[k]) if disz != 'STB' else '%.1f'|format(z[k])) }}{% endif %}</td>
+            {% endfor %}</tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="font-size:12px;">Zwischen zwei Zeilen wird linear interpoliert und auf Hundertstel abgerundet.</p>
+  </div>
+</div>
+
+<div>
+  <div class="card" style="margin-bottom:14px;">
+    <h3 style="margin-top:0;">Prüfen</h3>
+    <p class="muted" style="font-size:13px; margin-top:0;">Wert eingeben – Note je Kategorie mit der gespeicherten Tabelle.</p>
+    <input type="text" id="probe" inputmode="decimal" placeholder="Wert in {{ einheit }}" style="width:100%;">
+    <table style="margin-top:8px; width:100%;"><tbody>
+      {% for k in jet.KATEGORIEN %}<tr><td>Kat. {{ k }}</td><td class="num total" id="probe_{{ k }}">–</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+  <form method="post" class="card" onsubmit="return confirm('Formeln auf den Standard zurücksetzen?')">
+    <input type="hidden" name="aktion" value="standard">
+    <input type="hidden" name="g" value="{{ gesch }}"><input type="hidden" name="d" value="{{ disz }}">
+    <h3 style="margin-top:0;">Standard-Formeln</h3>
+    <p class="muted" style="font-size:13px; margin-top:0;">Formeln der DEBRA-Konfiguration – damit wurde die
+      Rangliste JET 2026 gerechnet.</p>
+    <label style="display:block; margin-bottom:10px;">Umfang
+      <select name="umfang" style="width:100%;">
+        <option value="disziplin">nur {{ D[disz][0] }} {{ 'Mädchen' if gesch == 'w' else 'Knaben' }}</option>
+        <option value="alle">alle Disziplinen, Mädchen und Knaben</option>
+      </select></label>
+    <button class="btn" type="submit">Auf Standard zurücksetzen</button>
+  </form>
+</div>
+</div>
+
+<script>
+const TAB = {{ tabelle_json|tojson }};
+function note(zeilen, w){
+  if(!zeilen || !zeilen.length || isNaN(w)) return null;
+  if(w === 0) return 6;
+  const p = {}; zeilen.forEach(([x, n]) => { p[x] = Math.max(n, p[x] === undefined ? n : p[x]); });
+  const xs = Object.keys(p).map(Number).sort((a,b)=>a-b);
+  if(w <= xs[0]) return p[xs[0]];
+  if(w >= xs[xs.length-1]) return p[xs[xs.length-1]];
+  for(let i=0; i+1<xs.length; i++){ const a=xs[i], b=xs[i+1];
+    if(a <= w && w <= b) return Math.floor((p[a] + (p[b]-p[a])*(w-a)/(b-a))*100 + 1e-7)/100; }
+  return null;
+}
+document.getElementById('probe').addEventListener('input', e => {
+  let t = e.target.value.trim().replace(',', '.'), w;
+  if(t.indexOf(':') > 0){ const [m, s] = t.split(':'); w = parseInt(m)*60 + parseFloat(s); } else w = parseFloat(t);
+  Object.keys(TAB).forEach(k => {
+    const n = t === '' ? null : note(TAB[k], w);
+    document.getElementById('probe_'+k).textContent = n === null ? '–' : n.toFixed(2);
+  });
+});
+</script>
+{% endblock %}

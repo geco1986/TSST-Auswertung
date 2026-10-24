@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_druck.html" import druckknoepfe %}
+{% from "_druck.html" import druckknoepfe, gesamt_warnung %}
 {% block title %}Gesamt-Rangliste{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -8,7 +8,8 @@
   <div class="spacer"></div>
   <a class="btn" href="{{ url_for('rangliste_index') }}">← Ranglisten</a>
 </div>
-<div class="card" style="margin-bottom:16px;">
+{{ gesamt_warnung(nicht_bereit, box=False) }}
+<div class="card gesamt-druck" style="margin-bottom:16px;">
   <div class="druck-zeile"><div class="was"><strong>Je Disziplin neue Seite</strong><small>jede Disziplin beginnt oben auf einer Seite</small></div>
     {{ druckknoepfe('rangliste') }}</div>
   <div class="druck-zeile"><div class="was"><strong>Fortlaufend</strong><small>Disziplinen direkt anschliessend; an Stellen mit Zusatzblatt beginnt trotzdem eine neue Seite</small></div>

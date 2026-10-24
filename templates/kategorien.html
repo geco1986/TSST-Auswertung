@@ -2,7 +2,7 @@
 {% block title %}Kategorien{% endblock %}
 {% block content %}
 <div class="page-head">
-  <div><h1>Kategorien</h1><p class="sub">Wettkampf-Kategorien beider Anlässe (TSST und JTSST) mit Disziplinen und Wertungsregeln.
+  <div><h1>Kategorien</h1><p class="sub">Wettkampf-Kategorien aller Anlässe (TSST, JTSST und JET) mit Disziplinen und Wertungsregeln.
     Neue Kategorien werden im oben gewählten Anlass angelegt.</p></div>
   <div class="spacer"></div>
   <a class="btn primary" href="{{ url_for('kategorie_form') }}">+ Kategorie</a>
@@ -18,7 +18,9 @@
     {% for k in liste %}
       {% if loop.first or k.wettkampf_id != loop.previtem.wettkampf_id %}
       <tr><th colspan="7" style="background:var(--paper);">
-        {{ 'JTSST' if anlaesse.get('jtsst') and anlaesse['jtsst']['id'] == k.wettkampf_id else 'TSST' }}
+        {% set ns = namespace(art='TSST') %}
+        {% for art, w in anlaesse.items() if w and w['id'] == k.wettkampf_id %}{% set ns.art = ANLAESSE[art] %}{% endfor %}
+        {{ ns.art }}
         <span class="muted" style="font-weight:400;"> · {{ k.wk_name }}</span></th></tr>
       {% endif %}
       <tr>

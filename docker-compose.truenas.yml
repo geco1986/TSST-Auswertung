@@ -4,7 +4,8 @@
 # 2) Apps -> Discover Apps -> (oben rechts) Custom App -> "Install via YAML"
 # 3) Diesen Inhalt einfügen, den Volume-Pfad unten an dein Dataset anpassen,
 #    DEBRA_SECRET auf einen eigenen Zufallswert setzen -> Install.
-# 4) App-Web-UI:  http://<TrueNAS-IP>:5000   (Login: Rolle wählen)
+# 4) App-Web-UI:  http://<TrueNAS-IP>:5000   (Login: Rolle wählen; beim ersten
+#    Superuser-Login wird dessen Passwort festgelegt)
 #
 # Voraussetzung: das Image ist in GHCR öffentlich (siehe TRUENAS.md).
 # ------------------------------------------------------------------
@@ -16,9 +17,10 @@ services:
     ports:
       - "5000:5000"                 # Host:Container – Host-Port bei Bedarf ändern
     volumes:
-      - /mnt/POOL/apps/tsst-auswertung:/data   # <-- an dein TrueNAS-Dataset anpassen
+      - /mnt/POOL/apps/tsst-auswertung:/data                 # Datenbank – an dein Dataset anpassen
+      - /mnt/POOL/apps/tsst-auswertung/Inputs:/app/Inputs    # Import-Dateien (Backups, Excel, PDF)
     environment:
       DEBRA_DB: /data/debra.sqlite3
       DEBRA_SECRET: "BITTE-EIGENEN-ZUFALLSWERT-SETZEN"
-      DEBRA_SEED: "1"               # 1 = bei leerer DB Demo-Daten, 0 = leer starten
+      DEBRA_SEED: "0"               # 0 = leer starten (TSST/JTSST/JET per Import), 1 = Demo-Daten
       PORT: "5000"

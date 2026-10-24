@@ -3,16 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Übersicht{% endblock %} · Auswertung TSST</title>
+  <title>{% block title %}Übersicht{% endblock %} · STARK</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='stark-mark.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="{{ 'anlass-' ~ anlass_art if anlass_art }}">
 {% if aktueller_user %}
 <div class="layout">
   <aside class="sidebar">
     <div class="brand">
-      <div class="logo"><span class="mark">T</span> Auswertung TSST</div>
-      <small>Turnwettkampf-Auswertung</small>
+      <div class="logo"><img class="mark-img" src="{{ url_for('static', filename='stark-mark.svg') }}" alt=""> STARK</div>
+      <small>Stafetten- und Turntag-Auswertung</small>
     </div>
     <nav class="nav">
       {% set p = request.path %}
@@ -25,11 +26,18 @@
 
       {{ navlink('dashboard', '▦', 'Übersicht') }}
 
-      <div class="group">Erfassung</div>
+      <div class="group">Erfassung{% if anlass_art %} · {{ ANLAESSE[anlass_art] }}{% endif %}</div>
+      {% if anlass_art == 'jet' %}
+      {{ navlink('jet_schnellerfassung', '⚡', 'Schnellerfassung') }}
+      {{ navlink('teilnehmer', '☰', 'Teilnehmer', '/teilnehmer') }}
+      {{ navlink('mutation', '⇌', 'Mutation') }}
+      {{ navlink('jet_erfassung', '✎', 'Nach Kategorie / Riege', '/jet/erfassung') }}
+      {% else %}
       {{ navlink('schnellerfassung', '⚡', 'Schnellerfassung') }}
       {{ navlink('teilnehmer', '☰', 'Teilnehmer', '/teilnehmer') }}
       {{ navlink('mutation', '⇌', 'Mutation') }}
       {{ navlink('erfassung_index', '✎', 'Nach Disziplin', '/erfassung') }}
+      {% endif %}
       {{ navlink('erfassungskontrolle', '◱', 'Erfassungskontrolle') }}
       {{ navlink('kontrollblatt', '✓', 'Kontrollblatt') }}
 
@@ -41,9 +49,15 @@
       {{ navlink('aenderungen', '⟳', 'Änderungs-Log') }}
       {{ navlink('vereinsblatt', '▤', 'Vereinsblatt') }}
 
+      {% if anlass_art == 'jet' %}
+      <div class="group">JET</div>
+      {% if ist_superuser %}{{ navlink('jet_wertungstabelle', '▦', 'Wertungsformeln', '/jet/wertungstabelle') }}{% endif %}
+      {% if ist_superuser %}{{ navlink('jet_import', '⇩', 'Anmeldungen importieren', '/jet/import') }}{% endif %}
+      {% else %}
       <div class="group">Stafetten</div>
       {{ navlink('stafetten_index', '⇄', 'Selektion & Bahnen', '/stafetten') }}
       {{ navlink('vorjahr_ansicht', '↺', 'Vorjahr (Setzung)') }}
+      {% endif %}
 
       <div class="group">Listen</div>
       {{ navlink('listen', '▤', 'Listen & Statistik') }}
@@ -52,7 +66,7 @@
       {{ navlink('zeitplan', '☷', 'Zeitplan (Import)') }}
 
       <div class="group">Konfiguration</div>
-      {{ navlink('einstellungen', '⚙', 'Einstellungen') }}
+      {{ navlink('einstellungen', '⚙', 'Einstellungen', '/einstellungen') }}
       {{ navlink('kategorien', '▥', 'Kategorien', '/kategorien') }}
       {{ navlink('disziplinen', '◈', 'Disziplinen') }}
       {{ navlink('vereine', '⬢', 'Vereine') }}
@@ -60,7 +74,7 @@
     </nav>
     <div class="foot">
       angemeldet als <strong>{{ aktueller_user }}</strong>
-      <span class="pill" style="font-size:11px;">{{ 'Chef' if ist_chef else 'Eingeber' }}</span><br>
+      <span class="pill" style="font-size:11px;">{{ ROLLEN.get(aktuelle_rolle, 'Eingeber') }}</span><br>
       <a href="{{ url_for('logout') }}">Abmelden</a>
     </div>
   </aside>
@@ -79,7 +93,7 @@
         {% for art, label in ANLAESSE.items() %}
           {% set w = anlaesse.get(art) %}
           {% set aktiv = w and aktueller_wettkampf and w['id'] == aktueller_wettkampf['id'] %}
-          {% if ist_chef and not aktiv %}
+          {% if ist_superuser and not aktiv %}
             <form method="post" action="{{ url_for('anlass_wechseln', art=art) }}">
               <input type="hidden" name="zurueck" value="{{ request.path }}">
               <button type="submit" title="{{ w['name'] if w else label ~ ' noch nicht angelegt' }}"
@@ -93,6 +107,10 @@
     </div>
 
     <div class="content">
+      {% if anlass_art %}
+        <div class="anlass-band"><strong>{{ ANLAESSE[anlass_art] }}</strong>
+          <span>{{ ANLASS_TITEL[anlass_art] }} – alle Eingaben und Listen dieser Seite gehören zu diesem Anlass.</span></div>
+      {% endif %}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           <div class="flashes">

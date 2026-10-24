@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}JET-Anmeldungen importieren{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>JET · Anmeldungen importieren</h1>
+  <p class="sub">Quelle je Sparte: DEBRA-Backup-Ordner (WT_/WR_-Dateien, mit Startnummern), Anmelde-Export
+    (<span class="mono">JR_JET.xls</span> / <span class="mono">MR_JET.xls</span>) oder DEBRA-Startliste nach Kategorie (PDF).</p></div></div>
+
+<form method="get" class="card" style="margin-bottom:16px;">
+  <div class="grid-2">
+    <label>Knaben<input type="text" name="knaben" value="{{ knaben }}" placeholder="Inputs\jet\Backup"></label>
+    <label>Mädchen<input type="text" name="maedchen" value="{{ maedchen }}" placeholder="Inputs\jet\Backup"></label>
+  </div>
+  <p class="muted" style="font-size:13px;">Pfad relativ zum Programmordner oder absolut. Leer lassen = Sparte
+    nicht importieren (bestehende Anmeldungen bleiben).</p>
+  <button class="btn primary" type="submit">Prüfen</button>
+</form>
+
+{% if pruefung %}
+<div class="grid-2" style="align-items:start;">
+  {% for g_, info in pruefung.items() %}
+  <div class="card">
+    <h3 style="margin-top:0;">{{ 'Knaben' if g_ == 'm' else 'Mädchen' }}
+      <span class="muted" style="font-weight:400;">· {{ info.quelle }} · {{ info.personen|length }} Personen · {{ info.vereine }} Vereine</span></h3>
+    <p class="muted mono" style="font-size:12px; margin-top:0;">{{ info.datei }}</p>
+    {% for w in info.warnungen[:12] %}<div class="flash error" style="margin-bottom:6px;">{{ w }}</div>{% endfor %}
+    {% if info.warnungen|length > 12 %}<p class="muted">… und {{ info.warnungen|length - 12 }} weitere Hinweise</p>{% endif %}
+    <table>
+      <thead><tr><th>Kategorie</th><th class="num">Personen</th></tr></thead>
+      <tbody>
+      {% for k, (alter, n, _, _) in jet.KATEGORIEN.items() %}
+        <tr><td>Kat. {{ k }} <span class="muted">{{ alter }}, {{ n }}-Kampf</span></td><td class="num">{{ info.je_kat.get(k, 0) }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="font-size:13px;">
+      {% if info.mit_startnr %}Startnummern aus der Quelle.{% else %}Startnummern werden neu vergeben
+        ({{ 'Knaben ab 1' if g_ == 'm' else 'Mädchen ab 500' }}, je Kategorie, Verein und Name).{% endif %}
+      {% if info.abgemeldet %} {{ info.abgemeldet }} abgemeldet.{% endif %}
+      {% if info.resultate %} {{ info.resultate }} Resultate werden übernommen.{% endif %}</p>
+  </div>
+  {% endfor %}
+</div>
+
+<form method="post" class="card" style="margin-top:16px;">
+  <input type="hidden" name="knaben" value="{{ knaben if pruefung.get('m') }}">
+  <input type="hidden" name="maedchen" value="{{ maedchen if pruefung.get('w') }}">
+  <p style="margin-top:0;">Ersetzt die bestehenden JET-Anmeldungen der geprüften Sparten
+    (aktuell Knaben {{ bestehend.m }}, Mädchen {{ bestehend.w }})
+    {%- if bestehend.resultate %} – <strong style="color:#a4161d;">{{ bestehend.resultate }} erfasste Resultate gehen verloren</strong>{% endif %}.
+    Vorher wird die Datenbank gesichert. TSST und JTSST bleiben unverändert.</p>
+  <div class="btn-row">
+    <button class="btn primary" type="submit" onclick="return confirm('JET-Anmeldungen jetzt ersetzen?')">Importieren</button>
+    <a class="btn ghost" href="{{ url_for('einstellungen') }}">Abbrechen</a>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

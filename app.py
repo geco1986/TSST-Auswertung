@@ -38,8 +38,20 @@ def login_required(view):
     return wrapped
 
 
-# Konfiguration ist vom Umschalter TSST/JTSST ausgenommen (zeigt beide Anlässe).
+# Konfiguration ist für den Superuser vom Umschalter TSST/JTSST/JET ausgenommen (zeigt alle Anlässe).
 KONFIGURATION = {"kategorie_form", "kategorie_loeschen"}
+
+# Rollen: eingeber < chef < superuser. Der Superuser wählt den aktiven Anlass und pflegt die
+# JET-Wertungsformeln; der Chef bearbeitet nur den aktiv gesetzten Anlass.
+ROLLEN = {"eingeber": "Eingeber", "chef": "Chef", "superuser": "Superuser"}
+
+
+def _ist_chef():
+    return session.get("rolle") in ("chef", "superuser")
+
+
+def _ist_superuser():
+    return session.get("rolle") == "superuser"
 
 
 @app.before_request
@@ -49,7 +61,8 @@ def load_context():
     g.rolle = session.get("rolle", "eingeber")
     # Seiten einer Kategorie/Gruppe nur im oben gewählten Anlass öffnen
     args = request.view_args or {}
-    if g.wettkampf and request.endpoint not in KONFIGURATION and ("kid" in args or "tid" in args):
+    if g.wettkampf and (request.endpoint not in KONFIGURATION or not _ist_superuser()) \
+            and ("kid" in args or "tid" in args):
         tabelle, oid = ("kategorie", args["kid"]) if "kid" in args else ("teilnehmer", args["tid"])
         row = g.db.execute(f"SELECT wettkampf_id FROM {tabelle} WHERE id=?", (oid,)).fetchone()
         if row and row["wettkampf_id"] != g.wettkampf["id"]:
@@ -69,11 +82,44 @@ def chef_required(view):
     def wrapped(*args, **kwargs):
         if not session.get("user"):
             return redirect(url_for("login", next=request.path))
-        if session.get("rolle") != "chef":
+        if not _ist_chef():
             flash("Dieser Bereich ist nur für die Rolle „Chef“.", "error")
             return redirect(url_for("dashboard"))
         return view(*args, **kwargs)
     return wrapped
+
+
+def superuser_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("user"):
+            return redirect(url_for("login", next=request.path))
+        if not _ist_superuser():
+            flash("Dieser Bereich ist nur für den Superuser.", "error")
+            return redirect(url_for("dashboard"))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def _eingabe_pfad(text, standard=""):
+    """Pfad aus einem Formularfeld: relativ = zum Programmordner; Windows-Schreibweise
+    (Inputs\\jet\\Backup) funktioniert auch im Linux-Container. Leer -> standard bzw. None."""
+    v = (text or "").strip().strip('"') or standard
+    if not v:
+        return None
+    if os.sep == "/":
+        v = v.replace("\\", "/")
+    from debra.db import pfad_finden
+    return pfad_finden(v if os.path.isabs(v) else os.path.join(os.path.dirname(os.path.abspath(__file__)), v))
+
+
+def _darf_anlass(art):
+    """Chef: nur der aktive Anlass; Superuser: alle. Sonst Hinweis und False."""
+    if _ist_superuser() or (g.wettkampf and _art(g.db, g.wettkampf) == art):
+        return True
+    flash(f"Der {ANLAESSE.get(art, art)} ist nicht der aktive Anlass – nur der Superuser kann ihn bearbeiten "
+          "bzw. aktiv setzen.", "error")
+    return False
 
 
 # Abgemeldete Gruppen erscheinen in keiner Erfassung und zählen nicht zum Fortschritt.
@@ -99,22 +145,41 @@ def _fortschritt(db, kat):
     return gruppen, erledigt
 
 
-# Die Software kennt genau zwei Anlässe: TSST (Turner/Turnerinnen) und JTSST (Jugend).
-ANLAESSE = {"tsst": "TSST", "jtsst": "JTSST"}
+# Die Software kennt drei Anlässe: TSST (Turner/Turnerinnen), JTSST (Jugend, Gruppen) und
+# JET (Jugend-Einzelturntag). Eingabe, Listen und Ranglisten zeigen immer nur den oben gewählten.
+ANLAESSE = {"tsst": "TSST", "jtsst": "JTSST", "jet": "JET"}
+ANLASS_TITEL = {"tsst": "Turn-, Spiel- und Stafettentag", "jtsst": "Jugend Turn-, Spiel- und Stafettentag",
+                "jet": "Jugend-Einzelturntag"}
 
 
 def _anlaesse(db):
-    """{'tsst': wettkampf-row|None, 'jtsst': wettkampf-row|None} – erkannt an den Sparten."""
+    """{'tsst'|'jtsst'|'jet': wettkampf-row|None} – erkannt an Namen und Sparten."""
+    from debra.jet import EVENT_NAME as JET_NAME
     from debra.jtsst import EVENT_NAME as JTSST_NAME
-    res = {"tsst": None, "jtsst": None}
+    res = {art: None for art in ANLAESSE}
     for w in db.execute(
-            "SELECT w.*, MAX(k.sparte IN ('Knaben','Mädchen')) AS jugend, "
+            "SELECT w.*, MAX(k.sparte LIKE 'JET %') AS jet, MAX(k.sparte IN ('Knaben','Mädchen')) AS jugend, "
             "MAX(k.sparte IN ('Turner','Turnerinnen')) AS aktive FROM wettkampf w "
             "LEFT JOIN kategorie k ON k.wettkampf_id=w.id GROUP BY w.id ORDER BY w.id").fetchall():
-        art = "jtsst" if (w["jugend"] or w["name"] == JTSST_NAME) else ("tsst" if w["aktive"] else None)
+        if w["jet"] or w["name"] == JET_NAME:
+            art = "jet"
+        elif w["jugend"] or w["name"] == JTSST_NAME:
+            art = "jtsst"
+        else:
+            art = "tsst" if w["aktive"] else None
         if art and res[art] is None:
             res[art] = w
     return res
+
+
+def _art(db, wettkampf):
+    """Art des Anlasses ('tsst' | 'jtsst' | 'jet') eines Wettkampfs, sonst None."""
+    if not wettkampf:
+        return None
+    for art, w in _anlaesse(db).items():
+        if w and w["id"] == wettkampf["id"]:
+            return art
+    return None
 
 
 def _anlass_titel(db):
@@ -140,11 +205,17 @@ def _anlass_titel(db):
 @app.context_processor
 def inject_globals():
     db = g.get("db")
-    return {"anlaesse": _anlaesse(db) if db is not None and session.get("user") else {},
-            "ANLAESSE": ANLAESSE,
+    anlaesse = _anlaesse(db) if db is not None and session.get("user") else {}
+    art = None
+    if g.get("wettkampf"):
+        art = next((a for a, w in anlaesse.items() if w and w["id"] == g.wettkampf["id"]), None)
+    return {"anlaesse": anlaesse,
+            "ANLAESSE": ANLAESSE, "ANLASS_TITEL": ANLASS_TITEL, "anlass_art": art,
             "aktueller_user": session.get("user"),
             "aktuelle_rolle": session.get("rolle", "eingeber"),
-            "ist_chef": session.get("rolle") == "chef",
+            "ist_chef": _ist_chef(),
+            "ist_superuser": _ist_superuser(),
+            "ROLLEN": ROLLEN,
             "kennung": session.get("kennung", ""),
             "aktueller_wettkampf": g.get("wettkampf"),
             "anlass_titel": _anlass_titel(g.db) if g.get("db") is not None else "",
@@ -154,16 +225,47 @@ def inject_globals():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    from werkzeug.security import check_password_hash, generate_password_hash
+    pw_hash = get_setting("superuser_passwort")
     if request.method == "POST":
         rolle = request.form.get("rolle", "eingeber")
-        if rolle not in ("chef", "eingeber"):
+        if rolle not in ROLLEN:
             rolle = "eingeber"
-        session["user"] = "Chef" if rolle == "chef" else "Eingeber"
+        if rolle == "superuser":
+            pw = request.form.get("passwort") or ""
+            if not pw_hash:
+                # erste Anmeldung: Passwort festlegen
+                if len(pw) < 6 or pw != (request.form.get("passwort2") or ""):
+                    flash("Superuser-Passwort festlegen: mindestens 6 Zeichen, zweimal gleich eingeben.", "error")
+                    return render_template("login.html", pw_gesetzt=False, super_offen=True)
+                set_setting("superuser_passwort", generate_password_hash(pw))
+                flash("Superuser-Passwort festgelegt.", "ok")
+            elif not check_password_hash(pw_hash, pw):
+                flash("Falsches Superuser-Passwort.", "error")
+                return render_template("login.html", pw_gesetzt=True, super_offen=True)
+        session.clear()
+        session["user"] = ROLLEN[rolle]
         session["rolle"] = rolle
         kennung = (request.form.get("kennung") or "").strip()
-        session["kennung"] = kennung or ("Chef" if rolle == "chef" else "Eingabe")
+        session["kennung"] = kennung or ("Eingabe" if rolle == "eingeber" else ROLLEN[rolle])
         return redirect(request.args.get("next") or url_for("dashboard"))
-    return render_template("login.html")
+    return render_template("login.html", pw_gesetzt=bool(pw_hash), super_offen=False)
+
+
+@app.route("/superuser/passwort", methods=["POST"])
+@superuser_required
+def superuser_passwort():
+    """Superuser-Passwort ändern (Einstellungen → Allgemein → Superuser)."""
+    from werkzeug.security import check_password_hash, generate_password_hash
+    alt, neu, neu2 = (request.form.get(k) or "" for k in ("alt", "neu", "neu2"))
+    if not check_password_hash(get_setting("superuser_passwort") or "", alt):
+        flash("Bisheriges Passwort stimmt nicht.", "error")
+    elif len(neu) < 6 or neu != neu2:
+        flash("Neues Passwort: mindestens 6 Zeichen, zweimal gleich eingeben.", "error")
+    else:
+        set_setting("superuser_passwort", generate_password_hash(neu))
+        flash("Superuser-Passwort geändert.", "ok")
+    return redirect(url_for("einstellungen") + "#allgemein/superuser")
 
 
 @app.route("/logout")
@@ -211,6 +313,9 @@ def dashboard():
 @chef_required
 def wettkaempfe():
     db = g.db
+    if request.method == "POST" and not _ist_superuser():
+        flash("Wettkämpfe anlegen kann nur der Superuser.", "error")
+        return redirect(url_for("wettkaempfe"))
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         if name:
@@ -224,7 +329,7 @@ def wettkaempfe():
 
 
 @app.route("/wettkaempfe/<int:wid>/aktiv")
-@chef_required
+@superuser_required
 def wettkampf_aktiv(wid):
     db = g.db
     db.execute("UPDATE wettkampf SET aktiv=0")
@@ -235,9 +340,9 @@ def wettkampf_aktiv(wid):
 
 
 @app.route("/anlass/<art>", methods=["POST"])
-@chef_required
+@superuser_required
 def anlass_wechseln(art):
-    """Umschalter oben rechts: TSST oder JTSST als aktiven Anlass setzen."""
+    """Umschalter oben rechts: TSST, JTSST oder JET als aktiven Anlass setzen."""
     if art not in ANLAESSE:
         abort(404)
     db = g.db
@@ -246,10 +351,14 @@ def anlass_wechseln(art):
         from debra.jtsst import anlegen
         anlegen(db)
         w = _anlaesse(db)[art]
+    if w is None and art == "jet":
+        from debra.jet import anlegen
+        anlegen(db)
+        w = _anlaesse(db)[art]
     if w is None:
         flash("Der TSST ist noch nicht angelegt – unter Einstellungen das DEBRA-Backup bzw. "
               "die Anmeldungen importieren.", "error")
-        return redirect(url_for("einstellungen"))
+        return redirect(url_for("einstellungen") + "#tsst/import")
     db.execute("UPDATE wettkampf SET aktiv=(id=?)", (w["id"],))
     db.commit()
     flash(f"Aktiver Anlass: {ANLAESSE[art]} – {w['name']}", "ok")
@@ -261,7 +370,7 @@ def anlass_wechseln(art):
 
 
 @app.route("/wettkaempfe/<int:wid>/loeschen", methods=["POST"])
-@chef_required
+@superuser_required
 def wettkampf_loeschen(wid):
     g.db.execute("DELETE FROM wettkampf WHERE id=?", (wid,))
     g.db.commit()
@@ -360,10 +469,12 @@ def kategorien():
     if not _require_wettkampf():
         return redirect(url_for("wettkaempfe"))
     db = g.db
-    # Konfiguration: Kategorien beider Anlässe (unabhängig vom Umschalter)
+    # Superuser: Kategorien aller Anlässe; Chef: nur der aktive Anlass
     liste = db.execute(
         "SELECT k.*, w.name AS wk_name FROM kategorie k JOIN wettkampf w ON w.id=k.wettkampf_id "
-        "ORDER BY k.wettkampf_id, k.sortierung, k.bezeichnung").fetchall()
+        + ("" if _ist_superuser() else "WHERE k.wettkampf_id=? ")
+        + "ORDER BY k.wettkampf_id, k.sortierung, k.bezeichnung",
+        () if _ist_superuser() else (g.wettkampf["id"],)).fetchall()
     liste = [dict(k) for k in liste]
     for k in liste:
         k["diszs"] = db.execute(
@@ -589,6 +700,8 @@ def mutation():
 def erfassung_index():
     if not _require_wettkampf():
         return redirect(url_for("wettkaempfe"))
+    if _art(g.db, g.wettkampf) == "jet":
+        return redirect(url_for("jet_erfassung"))
     kategorien = g.db.execute(
         "SELECT * FROM kategorie WHERE wettkampf_id=? ORDER BY sortierung, bezeichnung",
         (g.wettkampf["id"],)).fetchall()
@@ -709,6 +822,9 @@ def schnellerfassung():
         return redirect(url_for("wettkaempfe"))
     db = g.db
     wk_id = g.wettkampf["id"]
+    if _art(db, g.wettkampf) == "jet":
+        # JET: Erfassung je Teilnehmer:in mit Messwert -> Note über die Wertungstabelle
+        return redirect(url_for("jet_schnellerfassung", nr=request.values.get("nr", type=int)))
 
     if request.method == "POST" and request.form.get("aktion") == "speichern":
         tid = request.form.get("tid", type=int)
@@ -799,9 +915,11 @@ def erfassung(kid):
     kat = db.execute("SELECT * FROM kategorie WHERE id=?", (kid,)).fetchone()
     if not kat:
         abort(404)
+    if kat["berechnung"] == "jet":
+        return redirect(url_for("jet_erfassung", kat=kid))
     if "ist_stafette" in kat.keys() and kat["ist_stafette"]:
         # Stafetten werden im Stafetten-Modul bzw. per Schnellerfassung erfasst
-        if session.get("rolle") == "chef":
+        if _ist_chef():
             return redirect(url_for("stafette_verwalten", kid=kid))
         flash("Stafetten bitte über die Schnellerfassung erfassen.", "ok")
         return redirect(url_for("schnellerfassung"))
@@ -845,41 +963,86 @@ def rangliste_index():
     kategorien = g.db.execute(
         "SELECT * FROM kategorie WHERE wettkampf_id=? ORDER BY sortierung, bezeichnung",
         (g.wettkampf["id"],)).fetchall()
-    return render_template("rangliste_index.html", kategorien=kategorien)
+    status = {k["id"]: _rl_status(g.db, k) for k in kategorien}
+    return render_template("rangliste_index.html", kategorien=kategorien, status=status,
+                           nicht_bereit=_gesamt_pruefung(g.db, g.wettkampf))
 
 
 def _rl_status(db, kat):
-    """Workflow-Status einer Disziplin-Rangliste."""
+    """Workflow-Status einer Rangliste: eingegeben → kontrolliert → gedruckt → Fertig (WKL).
+
+    eingegeben: jede:r Teilnehmende (ohne Abgemeldete) hat ein Resultat oder einen Vermerk.
+    kontrolliert: alle erfassten Resultate per Kontrollblatt quittiert (Stafetten: entfällt).
+    offen: Teilnehmende ohne Eintrag – solange es solche gibt, kann nicht „gedruckt“ werden.
+    """
     kid = kat["id"]
-    tn = db.execute("SELECT COUNT(*) c FROM teilnehmer WHERE kategorie_id=?", (kid,)).fetchone()["c"]
+    gruppen, erledigt = _fortschritt(db, kat)
+    offen = db.execute(
+        f"SELECT t.startnr, t.vorname, t.nachname, v.name AS verein, t.gruppennr FROM teilnehmer t "
+        f"LEFT JOIN verein v ON v.id=t.verein_id WHERE t.kategorie_id=? AND {OHNE_ABGEMELDETE} "
+        "AND COALESCE(t.status,'')='' AND NOT EXISTS (SELECT 1 FROM resultat r WHERE r.teilnehmer_id=t.id "
+        "AND (r.note IS NOT NULL OR r.status IN ('dns','dnf'))) AND NOT EXISTS (SELECT 1 FROM stafette s "
+        "WHERE s.teilnehmer_id=t.id AND s.rohzeit IS NOT NULL) ORDER BY t.startnr", (kid,)).fetchall()
     if kat["ist_stafette"]:
-        erf = db.execute("SELECT COUNT(DISTINCT t.id) c FROM teilnehmer t JOIN stafette s "
-                         "ON s.teilnehmer_id=t.id WHERE t.kategorie_id=? AND s.rohzeit IS NOT NULL",
-                         (kid,)).fetchone()["c"]
+        kontrolliert = None                     # Stafetten laufen nicht über das Kontrollblatt
     else:
-        erf = db.execute("SELECT COUNT(DISTINCT teilnehmer_id) c FROM resultat r JOIN teilnehmer t "
-                         "ON t.id=r.teilnehmer_id WHERE t.kategorie_id=?", (kid,)).fetchone()["c"]
-    kon = db.execute("SELECT COUNT(*) c FROM teilnehmer WHERE kategorie_id=? AND kontrolliert_am IS NOT NULL",
-                     (kid,)).fetchone()["c"]
+        mit = db.execute(f"SELECT COUNT(*) c, SUM(t.kontrolliert_am IS NOT NULL) k FROM teilnehmer t "
+                         f"WHERE t.kategorie_id=? AND {OHNE_ABGEMELDETE} AND EXISTS (SELECT 1 FROM resultat r "
+                         "WHERE r.teilnehmer_id=t.id)", (kid,)).fetchone()
+        kontrolliert = bool(mit["c"]) and (mit["k"] or 0) >= mit["c"]
     return {
-        "eingegeben": tn > 0 and erf >= tn,
-        "kontrolliert": tn > 0 and kon >= tn,
-        "gedruckt": bool(kat["rl_gedruckt"] if "rl_gedruckt" in kat.keys() else 0),
-        "fertig": bool(kat["rl_fertig"] if "rl_fertig" in kat.keys() else 0),
-        "fertig_von": (kat["rl_fertig_von"] if "rl_fertig_von" in kat.keys() else "") or "",
+        "gruppen": gruppen, "erledigt": erledigt, "offen": len(offen),
+        "offen_liste": [(o["startnr"], (f"{o['vorname'] or ''} {o['nachname'] or ''}".strip()
+                         or f"{o['verein'] or ''} {o['gruppennr'] or ''}".strip())) for o in offen[:12]],
+        "eingegeben": gruppen > 0 and not offen,
+        "kontrolliert": kontrolliert,
+        "gedruckt": bool(kat["rl_gedruckt"]),
+        "fertig": bool(kat["rl_fertig"]),
+        "fertig_von": kat["rl_fertig_von"] or "",
     }
+
+
+def _gesamt_pruefung(db, wk):
+    """Ranglisten der Gesamt-Rangliste, die noch nicht kontrolliert bzw. von der WKL freigegeben sind."""
+    nicht_bereit = []
+    for k in db.execute("SELECT * FROM kategorie WHERE wettkampf_id=? AND rl_drucken=1 "
+                        "ORDER BY sortierung, bezeichnung", (wk["id"],)).fetchall():
+        st = _rl_status(db, k)
+        if not st["gruppen"]:
+            continue
+        fehlt = []
+        if not st["eingegeben"]:
+            fehlt.append(f"{st['offen']} ohne Eintrag")
+        if st["kontrolliert"] is False:
+            fehlt.append("nicht kontrolliert")
+        if not st["fertig"]:
+            fehlt.append("WKL-Freigabe fehlt")
+        if fehlt:
+            nicht_bereit.append({"kat": k, "fehlt": fehlt})
+    return nicht_bereit
 
 
 @app.route("/rangliste/<int:kid>/status", methods=["POST"])
 @chef_required
 def rangliste_status(kid):
     db = g.db
+    kat = db.execute("SELECT * FROM kategorie WHERE id=?", (kid,)).fetchone()
+    if not kat:
+        abort(404)
     feld = request.form.get("feld")
     if feld == "gedruckt":
-        db.execute("UPDATE kategorie SET rl_gedruckt=1 WHERE id=?", (kid,))
+        if kat["rl_gedruckt"]:
+            db.execute("UPDATE kategorie SET rl_gedruckt=0 WHERE id=?", (kid,))
+        else:
+            st = _rl_status(db, kat)
+            if not st["eingegeben"]:
+                flash(f"Noch nicht als gedruckt markierbar: {st['offen']} Teilnehmende ohne Resultat oder "
+                      "Vermerk.", "error")
+                return redirect(url_for("rangliste", kid=kid))
+            db.execute("UPDATE kategorie SET rl_gedruckt=1 WHERE id=?", (kid,))
+            _log(db, "rangliste", None, kid, "gedruckt", "", session.get("kennung", ""))
     elif feld == "fertig":
-        aktuell = db.execute("SELECT rl_fertig FROM kategorie WHERE id=?", (kid,)).fetchone()["rl_fertig"]
-        neu = 0 if aktuell else 1
+        neu = 0 if kat["rl_fertig"] else 1
         db.execute("UPDATE kategorie SET rl_fertig=?, rl_fertig_von=? WHERE id=?",
                    (neu, session.get("kennung", "WKL") if neu else None, kid))
     db.commit()
@@ -943,8 +1106,9 @@ def rangliste_druck(kid):
         abort(404)
     daten = scoring.rangliste(db, kat)
     status = _rl_status(db, kat)
-    db.execute("UPDATE kategorie SET rl_gedruckt=1 WHERE id=?", (kid,))  # Druck markiert „gedruckt"
-    db.commit()
+    if status["eingegeben"]:          # Druck markiert „gedruckt“ – nur wenn alles eingegeben ist
+        db.execute("UPDATE kategorie SET rl_gedruckt=1 WHERE id=?", (kid,))
+        db.commit()
     return render_template("rangliste_druck.html", wettkampf=g.wettkampf,
                            bloecke=[{"kat": kat, "daten": daten, "status": status}])
 
@@ -988,7 +1152,7 @@ def liste_ausgabe(name, fmt):
     from debra import listen
     if name not in listen.LISTEN or fmt not in ("pdf", "xlsx"):
         abort(404)
-    if name != "kontrollblatt" and session.get("rolle") != "chef":
+    if name != "kontrollblatt" and not _ist_chef():
         flash("Dieser Bereich ist nur für die Rolle „Chef“.", "error")
         return redirect(url_for("dashboard"))
     if not _require_wettkampf():
@@ -1124,6 +1288,7 @@ def rangliste_gesamt():
     blaetter = db.execute("SELECT id, titel, dateiname, seiten, position, sortierung, aktiv FROM zusatzblatt "
                           "WHERE wettkampf_id=? ORDER BY sortierung, id", (wk["id"],)).fetchall()
     return render_template("rangliste_gesamt.html", kategorien=kategorien, blaetter=blaetter,
+                           nicht_bereit=_gesamt_pruefung(db, wk),
                            positionen=_positionen(kategorien), opt=R.einstellungen(db, wk),
                            ablauf=R.ablauf(db, wk), titel_von=R._titel)
 
@@ -1282,6 +1447,8 @@ def konfiguration():
 @chef_required
 def wkb_anwenden():
     """Wendet die Wettkampfbestimmungen auf Turner/Turnerinnen an."""
+    if not _darf_anlass("tsst"):
+        return redirect(url_for("einstellungen"))
     from debra.wkb import anwenden
     try:
         b = anwenden(g.db)
@@ -1298,7 +1465,7 @@ def wkb_anwenden():
 
 
 @app.route("/konfiguration/jtsst", methods=["POST"])
-@chef_required
+@superuser_required
 def jtsst_anlegen():
     """Legt den Jugendwettkampf (JTSST) gemäss WKB 2026 an."""
     from debra.jtsst import anlegen
@@ -1316,14 +1483,11 @@ def jtsst_anlegen():
 
 
 @app.route("/konfiguration/jtsst/import", methods=["POST"])
-@chef_required
+@superuser_required
 def jtsst_import():
     """Importiert die JTSST-Anmeldungen (Gesamtübersicht + Alt-Export) aus einem Ordner."""
     from debra.jtsst import import_ordner
-    ordner = (request.form.get("ordner") or "").strip()
-    if not os.path.isabs(ordner):
-        ordner = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                              ordner or os.path.join("Inputs", "JTSST"))
+    ordner = _eingabe_pfad(request.form.get("ordner"), os.path.join("Inputs", "JTSST"))
     quelle = request.form.get("quelle", "uebersicht")
     try:
         b = import_ordner(g.db, ordner, quelle)
@@ -1342,17 +1506,15 @@ def jtsst_import():
 
 
 @app.route("/konfiguration/import", methods=["POST"])
-@chef_required
+@superuser_required
 def backup_import():
     """Importiert ein DEBRA-Backup (Ordner mit WT_/WR_/WI_-Textdateien)."""
     from debra.import_backup import importieren
     from debra.wkb import anwenden
-    pfad = (request.form.get("import_pfad") or "").strip()
+    pfad = _eingabe_pfad(request.form.get("import_pfad"))
     if not pfad:
         flash("Bitte den Pfad zum Backup-Ordner angeben.", "error")
-        return redirect(url_for("konfiguration"))
-    if not os.path.isabs(pfad):
-        pfad = os.path.join(os.path.dirname(os.path.abspath(__file__)), pfad)
+        return redirect(url_for("einstellungen") + "#tsst/import")
     try:
         b = importieren(pfad, reset=True)
         anwenden(g.db)
@@ -1373,20 +1535,48 @@ def backup_import():
 # --------------------------------------------------------------------------- #
 # Einstellungsseite (Chef) – konsolidierte Wettkampf-Konfiguration
 # --------------------------------------------------------------------------- #
-@app.route("/einstellungen", methods=["GET", "POST"])
+@app.route("/einstellungen")
 @chef_required
 def einstellungen():
+    """Alle Einstellungen auf einer Seite: Reiter Allgemein + je Anlass, darin Reiter je Art."""
     db = g.db
-    if request.method == "POST":
-        # Anlass-Daten je Wettkampf
-        for w in db.execute("SELECT id FROM wettkampf").fetchall():
-            name = request.form.get(f"wk_name_{w['id']}")
-            if name is not None:
-                db.execute("UPDATE wettkampf SET name=?, ort=?, datum=? WHERE id=?",
-                           (name.strip(), request.form.get(f"wk_ort_{w['id']}", "").strip(),
-                            request.form.get(f"wk_datum_{w['id']}", "").strip(), w["id"]))
+    anlaesse = []
+    aktiv = _art(db, g.wettkampf)
+    for art, w in _anlaesse(db).items():
+        if not _ist_superuser() and art != aktiv:
+            continue
+        kategorien = db.execute("SELECT * FROM kategorie WHERE wettkampf_id=? ORDER BY sortierung, bezeichnung",
+                                (w["id"],)).fetchall() if w else []
+        teilnehmer = db.execute(f"SELECT COUNT(*) c FROM teilnehmer t WHERE t.wettkampf_id=? AND {OHNE_ABGEMELDETE}",
+                                (w["id"],)).fetchone()["c"] if w else 0
+        anlaesse.append({"art": art, "w": w, "kategorien": kategorien, "teilnehmer": teilnehmer,
+                         "stafetten": [k for k in kategorien if k["ist_stafette"]]})
+    vorjahr_n = db.execute("SELECT COUNT(*) c FROM vorjahr").fetchone()["c"]
+    start = _art(db, g.wettkampf) or "allgemein"
+    return render_template("einstellungen.html", liste=anlaesse, modi=KRANZ_MODI, vorjahr_n=vorjahr_n,
+                           db_pfad=DB_PATH, start=start)
+
+
+@app.route("/einstellungen/<art>", methods=["GET", "POST"])
+@chef_required
+def einstellungen_anlass(art):
+    """Speichert die Einstellungen eines Anlasses (Formular eines Reiters); GET springt zum Reiter."""
+    if art not in ANLAESSE:
+        abort(404)
+    db = g.db
+    w = _anlaesse(db)[art]
+    if request.method == "POST" and not _darf_anlass(art):
+        return redirect(url_for("einstellungen"))
+    if request.method == "POST" and w:
+        wid = w["id"]
+        name = request.form.get("wk_name")
+        if name is not None:
+            db.execute("UPDATE wettkampf SET name=?, ort=?, datum=? WHERE id=?",
+                       (name.strip(), request.form.get("wk_ort", "").strip(),
+                        request.form.get("wk_datum", "").strip(), wid))
+        kats = db.execute("SELECT id, ist_stafette FROM kategorie WHERE wettkampf_id=?", (wid,)).fetchall()
         # Auszeichnung pro Kategorie (Modus + Wert)
-        for kat in db.execute("SELECT id FROM kategorie").fetchall():
+        for kat in kats:
             modus = request.form.get(f"km_{kat['id']}")
             if modus:
                 wert = request.form.get(f"kw_{kat['id']}", type=float)
@@ -1396,43 +1586,28 @@ def einstellungen():
                            "anz_meldeschluss=? WHERE id=?",
                            (modus, wert or 0, basis if basis in ("angemeldet", "rangiert") else "angemeldet",
                             melde, kat["id"]))
-        # Auszeichnungs-Prozentsatz auf alle Kategorien anwenden (optional)
+        # Auszeichnungs-Prozentsatz auf alle Kategorien dieses Anlasses anwenden (optional)
         proz = request.form.get("kranz_prozent", type=float)
         if proz is not None and request.form.get("kranz_auf_alle"):
-            db.execute("UPDATE kategorie SET kranz_modus='prozent', kranz_wert=?", (proz,))
-        # Stafetten-Zuschläge je Stafetten-Kategorie
-        for kat in db.execute("SELECT id FROM kategorie WHERE ist_stafette=1").fetchall():
+            db.execute("UPDATE kategorie SET kranz_modus='prozent', kranz_wert=? WHERE wettkampf_id=?", (proz, wid))
+        for kat in kats:
+            # Stafetten-Zuschläge
             za = request.form.get(f"za_{kat['id']}", type=float)
-            zb = request.form.get(f"zb_{kat['id']}", type=float)
-            bahnen = request.form.get(f"bahnen_{kat['id']}", type=int)
-            if za is not None:
+            if kat["ist_stafette"] and za is not None:
                 db.execute("UPDATE kategorie SET zuschlag_a=?, zuschlag_b=?, bahnen=? WHERE id=?",
-                           (za, zb or 0, bahnen or 8, kat["id"]))
-        # Zeitplan & Plausibilität pro Disziplin
-        for kat in db.execute("SELECT id FROM kategorie").fetchall():
+                           (za, request.form.get(f"zb_{kat['id']}", type=float) or 0,
+                            request.form.get(f"bahnen_{kat['id']}", type=int) or 8, kat["id"]))
+            # Zeitplan & Plausibilität
             if request.form.get(f"anl_{kat['id']}") is not None:
-                anl = request.form.get(f"anl_{kat['id']}", type=int)
-                zpt = request.form.get(f"zpt_{kat['id']}", type=float)
-                wmin = request.form.get(f"wmin_{kat['id']}", type=float)
-                wmax = request.form.get(f"wmax_{kat['id']}", type=float)
                 db.execute("UPDATE kategorie SET anlagen=?, zeit_pro_turner=?, warn_min=?, warn_max=? WHERE id=?",
-                           (anl or 1, zpt or 0, wmin, wmax, kat["id"]))
+                           (request.form.get(f"anl_{kat['id']}", type=int) or 1,
+                            request.form.get(f"zpt_{kat['id']}", type=float) or 0,
+                            request.form.get(f"wmin_{kat['id']}", type=float),
+                            request.form.get(f"wmax_{kat['id']}", type=float), kat["id"]))
         db.commit()
-        flash("Einstellungen gespeichert.", "ok")
-        return redirect(url_for("einstellungen"))
-
-    wettkaempfe = db.execute("SELECT * FROM wettkampf ORDER BY id").fetchall()
-    stafetten = db.execute(
-        "SELECT k.*, COALESCE(k.sparte, w.name) AS wk_name FROM kategorie k JOIN wettkampf w ON w.id=k.wettkampf_id "
-        "WHERE k.ist_stafette=1 ORDER BY w.id, k.sortierung").fetchall()
-    kategorien = db.execute(
-        "SELECT k.*, COALESCE(k.sparte, w.name) AS wk_name FROM kategorie k JOIN wettkampf w ON w.id=k.wettkampf_id "
-        "ORDER BY w.id, k.sortierung").fetchall()
-    vorjahr_n = db.execute("SELECT COUNT(*) c FROM vorjahr").fetchone()["c"]
-    settings = {k: get_setting(k, "") for k in ("pc_id", "client_typ")}
-    return render_template("einstellungen.html", wettkaempfe=wettkaempfe,
-                           stafetten=stafetten, kategorien=kategorien, modi=KRANZ_MODI,
-                           vorjahr_n=vorjahr_n, settings=settings, db_pfad=DB_PATH)
+        flash(f"Einstellungen {ANLAESSE[art]} gespeichert.", "ok")
+    reiter = request.form.get("reiter") or art
+    return redirect(url_for("einstellungen") + "#" + reiter)
 
 
 # --------------------------------------------------------------------------- #
@@ -1442,7 +1617,7 @@ def einstellungen():
 @login_required
 def erfassungskontrolle():
     if not _require_wettkampf():
-        return redirect(url_for("wettkaempfe") if g.rolle == "chef" else url_for("dashboard"))
+        return redirect(url_for("wettkaempfe") if _ist_chef() else url_for("dashboard"))
     db = g.db
     bloecke = []
     for w in _aktiver_anlass():
@@ -1595,26 +1770,23 @@ def kontrollblatt():
         "SELECT k.*, COALESCE(k.sparte, w.name) AS wk_name FROM kategorie k JOIN wettkampf w ON w.id=k.wettkampf_id "
         "WHERE k.ist_stafette=0 AND k.wettkampf_id=? ORDER BY k.sortierung",
         (g.wettkampf["id"] if g.wettkampf else 0,)).fetchall()
+    from debra.listen import kontroll_spalten, kontroll_werte
     for k in kat_rows:
         if kat_filter and k["id"] != kat_filter:
             continue
-        positionen = _kat_positionen(db, k)[0]
+        spalten = kontroll_spalten(db, k)
         rows = db.execute(
-            "SELECT DISTINCT t.id, t.startnr, t.gruppennr, t.kontrolliert_am, t.kontrolliert_von, "
-            "v.name AS verein_name, t.verein_zusatz FROM teilnehmer t "
-            "LEFT JOIN verein v ON v.id=t.verein_id JOIN resultat r ON r.teilnehmer_id=t.id "
+            "SELECT DISTINCT t.id, t.startnr, t.kontrolliert_am, t.kontrolliert_von FROM teilnehmer t "
+            "JOIN resultat r ON r.teilnehmer_id=t.id "
             "WHERE t.kategorie_id=? AND r.erfasst_von=? ORDER BY t.startnr", (k["id"], gewaehlt)).fetchall()
         eintraege = []
         for t in rows:
             if nur_offen and t["kontrolliert_am"]:
                 continue
-            werte = {r["position"]: (r["status"].upper() if r["status"] else
-                                     (f"{r['note']:.2f}" if r["note"] is not None else ""))
-                     for r in db.execute("SELECT position, note, status FROM resultat WHERE teilnehmer_id=?",
-                                         (t["id"],)).fetchall()}
-            eintraege.append({"t": t, "werte": [werte.get(p, "") for p in positionen]})
+            werte = kontroll_werte(db, k, t["id"])
+            eintraege.append({"t": t, "werte": [werte.get(p, "") for p, _, _ in spalten]})
         if eintraege:
-            bloecke.append({"kat": k, "positionen": positionen, "eintraege": eintraege})
+            bloecke.append({"kat": k, "kopf": [label for _, _, label in spalten], "eintraege": eintraege})
     return render_template("kontrollblatt.html", bloecke=bloecke, kennungen=kennungen,
                            gewaehlt=gewaehlt, nur_offen=nur_offen, kat_filter=kat_filter,
                            alle_kats=kat_rows)
@@ -2030,7 +2202,7 @@ def stafette_bahnen_druck(kid):
 
 
 @app.route("/import/excel", methods=["GET", "POST"])
-@chef_required
+@superuser_required
 def excel_import():
     """Schritt 1: Excel hochladen -> Spalten automatisch zuordnen -> prüfen."""
     from debra import excel_import as X
@@ -2061,7 +2233,7 @@ def excel_import():
 
 
 @app.route("/import/excel/uebernehmen", methods=["POST"])
-@chef_required
+@superuser_required
 def excel_uebernehmen():
     """Schritt 2: geprüfte Zuordnung übernehmen und Anmeldungen anlegen."""
     from debra import excel_import as X
@@ -2085,6 +2257,47 @@ def excel_uebernehmen():
             os.remove(pfad)
         except OSError:
             pass
+    return redirect(url_for("teilnehmer"))
+
+
+def _import_ordner_pfad():
+    from debra.excel_import import STANDARD_ORDNER
+    return _eingabe_pfad(request.values.get("ordner"), STANDARD_ORDNER)
+
+
+@app.route("/import/ordner")
+@superuser_required
+def import_ordner():
+    """Schritt 1: TSST- und JTSST-Excel eines Ordners lesen und zur Prüfung anzeigen."""
+    from debra import excel_import as X
+    ordner = _import_ordner_pfad()
+    try:
+        p = X.ordner_pruefen(g.db, ordner)
+    except Exception as exc:  # noqa: BLE001
+        flash(f"Ordner konnte nicht gelesen werden: {exc}", "error")
+        return redirect(url_for("einstellungen"))
+    return render_template("import_ordner.html", pruefung=p, ordner=ordner)
+
+
+@app.route("/import/ordner", methods=["POST"])
+@superuser_required
+def import_ordner_uebernehmen():
+    """Schritt 2: Anmeldungen übernehmen (ersetzt TSST/JTSST-Anmeldungen, vorher Sicherung)."""
+    from debra import excel_import as X
+    try:
+        b = X.ordner_importieren(g.db, _import_ordner_pfad())
+        teile = []
+        if b["tsst"] is not None:
+            teile.append(f"TSST {b['tsst']} Gruppen")
+        if b["jtsst"]:
+            teile.append("JTSST {gruppen} Gruppen".format(**b["jtsst"]))
+        flash("Anmeldungen importiert: " + ", ".join(teile)
+              + f". Sicherung: {os.path.basename(b['sicherung'])}", "ok")
+        if b["jtsst"] and b["jtsst"]["fehlende_kategorien"]:
+            flash("Keine JTSST-Kategorie für: " + "; ".join(b["jtsst"]["fehlende_kategorien"]), "error")
+    except Exception as exc:  # noqa: BLE001
+        flash(f"Import fehlgeschlagen: {exc}", "error")
+        return redirect(url_for("einstellungen"))
     return redirect(url_for("teilnehmer"))
 
 
@@ -2172,21 +2385,340 @@ def vorjahr_ansicht():
 
 
 @app.route("/vorjahr/import", methods=["POST"])
-@chef_required
+@superuser_required
 def vorjahr_import():
     from debra import vorjahr as vj
-    pfad = (request.form.get("pdf_pfad") or "").strip() or None
+    pfad = _eingabe_pfad(request.form.get("pdf_pfad"))
     try:
         n = vj.importieren(conn=g.db, pdf_pfad=pfad)
         flash(f"Vorjahres-Rangliste importiert: {n} Stafetten-Resultate.", "ok")
     except Exception as exc:  # pragma: no cover
         flash(f"Import fehlgeschlagen: {exc}", "error")
-    return redirect(url_for("einstellungen"))
+    return redirect(url_for("einstellungen") + "#tsst/import")
+
+
+# --------------------------------------------------------------------------- #
+# JET – Jugend-Einzelturntag: Erfassung, Wertungstabelle, Import
+# --------------------------------------------------------------------------- #
+def _jet_wettkampf():
+    """Aktiver Wettkampf, falls er der JET ist – sonst Hinweis und None."""
+    if g.wettkampf and _art(g.db, g.wettkampf) == "jet":
+        return g.wettkampf
+    flash("Diese Seite gehört zum JET – bitte oben rechts auf „JET“ umschalten.", "error")
+    return None
+
+
+def _jet_args(**neu):
+    """Aktuelle Filter der JET-Erfassung (für Links und Redirects)."""
+    args = {k: request.values.get(k) for k in ("g", "kat", "verein", "disz", "nr")}
+    args.update(neu)
+    return {k: v for k, v in args.items() if v not in (None, "")}
+
+
+@app.route("/jet/schnellerfassung", methods=["GET", "POST"])
+@login_required
+def jet_schnellerfassung():
+    """JET-Schnellerfassung wie bei TSST/JTSST: Startnummer eingeben, Disziplinen untereinander."""
+    return jet_erfassung.__wrapped__()
+
+
+@app.route("/jet/erfassung", methods=["GET", "POST"])
+@login_required
+def jet_erfassung():
+    """JET-Eingabe: Messwert bzw. Gerätenote je Disziplin, Note und Total werden berechnet.
+
+    Filter: Sparte, Kategorie, Verein (= Riege), Disziplin (Posten-Erfassung) oder Startnummer.
+    """
+    from debra import jet
+    wk = _jet_wettkampf()
+    if wk is None:
+        return redirect(url_for("dashboard"))
+    db = g.db
+    kats = db.execute("SELECT * FROM kategorie WHERE wettkampf_id=? AND berechnung='jet' "
+                      "ORDER BY sortierung", (wk["id"],)).fetchall()
+    kat_map = {k["id"]: k for k in kats}
+    gesch = request.values.get("g") or None
+    kid = request.values.get("kat", type=int)
+    vid = request.values.get("verein", type=int)
+    disz = request.values.get("disz") or None
+    nr = request.values.get("nr", type=int)
+
+    bed, args = [f"t.wettkampf_id=?", OHNE_ABGEMELDETE], [wk["id"]]
+    if nr is not None:
+        t = db.execute("SELECT t.kategorie_id FROM teilnehmer t WHERE t.wettkampf_id=? AND t.startnr=?",
+                       (wk["id"], nr)).fetchone()
+        if t is None:
+            anders = db.execute("SELECT w.name FROM teilnehmer t JOIN wettkampf w ON w.id=t.wettkampf_id "
+                                "WHERE t.startnr=? LIMIT 1", (nr,)).fetchone()
+            flash(f"Startnummer {nr} gibt es im JET nicht"
+                  + (f" (sie gehört zu {anders['name']})." if anders else "."), "error")
+            return redirect(url_for(request.endpoint, **_jet_args(nr=None)))
+        kid, vid, disz = t["kategorie_id"], None, None
+        bed.append("t.startnr=?")
+        args.append(nr)
+    if kid in kat_map:
+        gesch = kat_map[kid]["geschlecht"]
+        bed.append("t.kategorie_id=?")
+        args.append(kid)
+    else:
+        kid = None
+    if vid:
+        bed.append("t.verein_id=?")
+        args.append(vid)
+    if gesch in ("m", "w"):
+        bed.append("k.geschlecht=?")
+        args.append(gesch)
+    else:
+        gesch = None
+    aktiv = bool(kid or vid or nr is not None) and gesch is not None
+
+    programm = jet.PROGRAMM.get(gesch or "w", [])
+    spalten = [a for a in programm if not disz or a == disz]
+    if disz and disz not in programm:
+        disz, spalten = None, programm
+    pos_von = {a: programm.index(a) + 1 for a in programm}
+
+    teilnehmende = []
+    if aktiv:
+        teilnehmende = db.execute(
+            "SELECT t.*, v.name AS verein_name, k.abk AS kat_abk, k.bezeichnung AS kat_bez FROM teilnehmer t "
+            "JOIN kategorie k ON k.id=t.kategorie_id LEFT JOIN verein v ON v.id=t.verein_id "
+            f"WHERE {' AND '.join(bed)} ORDER BY k.sortierung, t.startnr", args).fetchall()
+
+    if request.method == "POST" and aktiv:
+        um = jet.Umrechner(db)
+        kennung, jetzt = session.get("kennung", ""), _jetzt()
+        n_neu, fehler = 0, []
+        for t in teilnehmende:
+            kat_bst = jet.kat_buchstabe(kat_map[t["kategorie_id"]])
+            alt = {r["position"]: r for r in db.execute(
+                "SELECT position, wert, note FROM resultat WHERE teilnehmer_id=?", (t["id"],)).fetchall()}
+            for abk in spalten:
+                feld = f"w_{t['id']}_{abk}"
+                if feld not in request.form:
+                    continue
+                roh = (request.form.get(feld) or "").strip()
+                p = pos_von[abk]
+                alt_txt = "" if p not in alt or alt[p]["wert"] is None else f"{alt[p]['wert']:g}"
+                if roh == "":
+                    if p in alt:
+                        db.execute("DELETE FROM resultat WHERE teilnehmer_id=? AND position=?", (t["id"], p))
+                        _log(db, "resultat", t["id"], t["kategorie_id"], abk, alt_txt, "")
+                    continue
+                wert = scoring.parse_zeit(roh) if jet.DISZIPLINEN[abk][2] == "s" else None
+                if wert is None:
+                    try:
+                        wert = round(float(roh.replace(",", ".")), 2)
+                    except ValueError:
+                        fehler.append(f"Nr. {t['startnr']} {abk}: „{roh}“ ist keine Zahl")
+                        continue
+                if jet.DISZIPLINEN[abk][1] == "geraete" and not 0 <= wert <= 10:
+                    fehler.append(f"Nr. {t['startnr']} {abk}: Note {wert} ausserhalb 0–10")
+                    continue
+                note = um.note(t["geschlecht"] or gesch, abk, kat_bst, wert)
+                if p in alt and alt[p]["wert"] == wert and alt[p]["note"] == note:
+                    continue
+                db.execute(
+                    "INSERT INTO resultat(teilnehmer_id, position, wert, note, status, erfasst_von, erfasst_am) "
+                    "VALUES(?,?,?,?,NULL,?,?) ON CONFLICT(teilnehmer_id, position) DO UPDATE SET "
+                    "wert=excluded.wert, note=excluded.note, status=NULL, erfasst_von=excluded.erfasst_von, "
+                    "erfasst_am=excluded.erfasst_am", (t["id"], p, wert, note, kennung, jetzt))
+                _log(db, "resultat", t["id"], t["kategorie_id"], abk, alt_txt, f"{wert:g}")
+                n_neu += 1
+            if f"st_{t['id']}" in request.form:
+                status = request.form.get(f"st_{t['id']}", "").strip() or None
+                if status != (t["status"] or None):
+                    db.execute("UPDATE teilnehmer SET status=? WHERE id=?", (status, t["id"]))
+                    _log(db, "vermerk", t["id"], t["kategorie_id"], "Vermerk", t["status"] or "", status or "")
+        db.commit()
+        for f in fehler:
+            flash(f, "error")
+        if len(teilnehmende) == 1:
+            t = teilnehmende[0]
+            flash(f"Nr. {t['startnr']} {t['vorname']} {t['nachname']}: {n_neu} Resultat(e) gespeichert.", "ok")
+        else:
+            flash(f"{n_neu} Resultat(e) gespeichert.", "ok")
+        weiter = request.form.get("weiter", type=int)
+        if weiter is not None and not fehler:
+            return redirect(url_for(request.endpoint, nr=weiter))
+        return redirect(url_for(request.endpoint, gespeichert=1 if nr is not None else None, **_jet_args()))
+
+    # Anzeige: Werte, Noten und Wertung je Teilnehmer:in
+    zeilen = []
+    for t in teilnehmende:
+        res = {r["position"]: r for r in db.execute(
+            "SELECT position, wert, note FROM resultat WHERE teilnehmer_id=?", (t["id"],)).fetchall()}
+        noten = [res[p]["note"] if p in res else None for p in range(1, len(programm) + 1)]
+        w = jet.wertung(programm, noten, jet.kat_buchstabe(kat_map[t["kategorie_id"]]))
+        zellen = {}
+        for abk in programm:
+            r = res.get(pos_von[abk])
+            zellen[abk] = {"wert": "" if not r or r["wert"] is None else
+                           (scoring.fmt_zeit(r["wert"]) if jet.DISZIPLINEN[abk][2] == "s" else f"{r['wert']:g}"),
+                           "note": r["note"] if r else None,
+                           "gestrichen": pos_von[abk] - 1 in w["gestrichen"],
+                           "falsch": pos_von[abk] - 1 in w["falsch"]}
+        zeilen.append({"t": t, "kat": jet.kat_buchstabe(kat_map[t["kategorie_id"]]), "zellen": zellen,
+                       "wertung": w})
+
+    vereine = db.execute(
+        "SELECT DISTINCT v.id, v.name FROM teilnehmer t JOIN verein v ON v.id=t.verein_id "
+        "JOIN kategorie k ON k.id=t.kategorie_id WHERE t.wettkampf_id=?"
+        + (" AND k.geschlecht=?" if gesch else "") + " ORDER BY v.name",
+        (wk["id"], gesch) if gesch else (wk["id"],)).fetchall()
+    uebersicht = []
+    for k in kats:
+        tn, mit = _fortschritt(db, k)
+        uebersicht.append({"k": k, "tn": tn, "mit": mit})
+    tabellen = jet.Umrechner(db).alle(gesch) if aktiv else {}
+    gruppen_kopf = []                  # Kopfzeile Geräte | Leichtathletik | Plausch
+    for a in spalten:
+        gr = jet.DISZIPLINEN[a][1]
+        if gruppen_kopf and gruppen_kopf[-1][0] == gr:
+            gruppen_kopf[-1][1] += 1
+        else:
+            gruppen_kopf.append([gr, 1])
+    # eine Person (Startnummer): Disziplinen untereinander statt Raster
+    einzeln = nr is not None and len(zeilen) == 1
+    schnell = request.endpoint == "jet_schnellerfassung"
+    if schnell and aktiv and not einzeln:
+        # Schnellerfassung zeigt nur einzelne Personen – Raster in der Erfassung nach Kategorie
+        return redirect(url_for("jet_erfassung", **_jet_args()))
+    return render_template("jet_erfassung.html", kats=kats, gruppen_kopf=gruppen_kopf, einzeln=einzeln,
+                           schnell=schnell, gesch=gesch, kid=kid, vid=vid, disz=disz, nr=nr,
+                           aktiv=aktiv, spalten=spalten, zeilen=zeilen, vereine=vereine,
+                           uebersicht=uebersicht, jet=jet, tabellen=tabellen,
+                           status_labels=scoring.STATUS_LABELS)
+
+
+@app.route("/jet/wertungstabelle", methods=["GET", "POST"])
+@superuser_required
+def jet_wertungstabelle():
+    """Formel je Disziplin und Kategorie pflegen; daraus wird die Wertungstabelle erzeugt."""
+    from debra import jet
+    db = g.db
+    gesch = request.values.get("g", "w")
+    gesch = gesch if gesch in ("m", "w") else "w"
+    disz = request.values.get("d", "WE")
+    disz = disz if disz in jet.TABELLEN_DISZ else "WE"
+    jet.formeln_sicherstellen(db)
+    name = f"{jet.DISZIPLINEN[disz][0]} {'Knaben' if gesch == 'm' else 'Mädchen'}"
+    eingabe = None
+
+    if request.method == "POST":
+        aktion = request.form.get("aktion", "speichern")
+        try:
+            if aktion == "speichern":
+                eingabe = {k: (request.form.get(f"f_{k}") or "").strip() for k in jet.KATEGORIEN}
+                alt = jet.formeln(db, gesch, disz)
+                neu = {k: v for k, v in eingabe.items() if v != alt[k]}
+                if neu:
+                    n = jet.formel_speichern(db, gesch, disz, neu)
+                    flash(f"{name}: Formel Kat. {', '.join(neu)} gespeichert – Tabelle neu erzeugt ({n} Zeilen).", "ok")
+                else:
+                    flash("Keine Formel geändert.", "ok")
+            elif aktion == "standard":
+                alle = request.form.get("umfang") == "alle"
+                jet.formeln_standard(db, None if alle else gesch, None if alle else disz)
+                flash(("Alle Formeln" if alle else f"Formeln {name}") + " auf Standard zurückgesetzt, Tabellen neu erzeugt.", "ok")
+        except jet.FormelFehler as e:
+            flash(f"Nicht gespeichert – {e}", "error")
+            return _jet_tabelle_seite(gesch, disz, eingabe)
+        geaendert = jet.noten_neu_berechnen(db)
+        if geaendert:
+            flash(f"{geaendert} bereits erfasste Note(n) neu berechnet.", "ok")
+        return redirect(url_for("jet_wertungstabelle", g=gesch, d=disz))
+    return _jet_tabelle_seite(gesch, disz, None)
+
+
+def _jet_tabelle_seite(gesch, disz, eingabe):
+    from debra import jet
+    db = g.db
+    gespeichert = jet.formeln(db, gesch, disz)
+    raster = jet.tabelle_raster(db, gesch, disz)
+    for z in raster:
+        for k in jet.KATEGORIEN:
+            if isinstance(z.get(k), list):
+                z[k] = z[k][0]
+    tab = jet.tabelle(db, gesch, disz)
+    return render_template("jet_tabelle.html", jet=jet, gesch=gesch, disz=disz, raster=raster,
+                           formeln=eingabe or gespeichert, gespeichert=gespeichert,
+                           standard={k: jet.standard_formel(gesch, disz, k) for k in jet.KATEGORIEN},
+                           tabelle_json={k: [list(r) for r in v] for k, v in tab.items()})
+
+
+@app.route("/jet/import", methods=["GET", "POST"])
+@superuser_required
+def jet_import():
+    """JET-Anmeldungen: DEBRA-Backup, Anmelde-Export (Excel) oder Startliste (PDF) mit Prüfschritt."""
+    from debra import excel_import as X, jet
+    db = g.db
+    basis = os.path.dirname(os.path.abspath(__file__))
+    vorschlag = jet.standard_dateien(os.path.join(basis, jet.STANDARD_ORDNER))
+
+    def pfad(name):
+        return _eingabe_pfad(request.values.get(name))
+
+    dateien = {"m": pfad("knaben"), "w": pfad("maedchen")}
+    if request.method == "POST":
+        try:
+            sich = X.sicherung(db, "vor-jet-import")
+            b = jet.importieren(db, {k: v for k, v in dateien.items() if v})
+            w = _anlaesse(db)["jet"]
+            db.execute("UPDATE wettkampf SET aktiv=(id=?)", (w["id"],))
+            db.commit()
+            flash(f"JET-Anmeldungen importiert: {b['personen']} Teilnehmende (Knaben {b['je_sparte'].get('m', 0)}, "
+                  f"Mädchen {b['je_sparte'].get('w', 0)}), {b['vereine']} neue Vereine, {b['resultate']} Resultate. "
+                  f"Sicherung: {os.path.basename(sich)}", "ok")
+            if b["uebersprungen"]:
+                flash(f"{b['uebersprungen']} Personen ohne JET-Jahrgang übersprungen.", "error")
+        except Exception as e:  # noqa: BLE001
+            flash(f"JET-Import fehlgeschlagen: {e}", "error")
+            return redirect(url_for("jet_import"))
+        return redirect(url_for("jet_erfassung"))
+
+    pruefung = None
+    if any(dateien.values()):
+        pruefung = jet.pruefen({k: v for k, v in dateien.items() if v})
+    w = _anlaesse(db)["jet"]
+    bestehend = {"m": 0, "w": 0, "resultate": 0}
+    if w:
+        for r in db.execute("SELECT k.geschlecht, COUNT(*) c FROM teilnehmer t JOIN kategorie k "
+                            "ON k.id=t.kategorie_id WHERE t.wettkampf_id=? GROUP BY k.geschlecht", (w["id"],)):
+            bestehend[r["geschlecht"]] = r["c"]
+        bestehend["resultate"] = db.execute(
+            "SELECT COUNT(*) c FROM resultat r JOIN teilnehmer t ON t.id=r.teilnehmer_id "
+            "WHERE t.wettkampf_id=? AND r.erfasst_von<>'Import'", (w["id"],)).fetchone()["c"]
+
+    def rel(p):
+        return os.path.relpath(p, basis) if p else ""
+    return render_template("jet_import.html", pruefung=pruefung, bestehend=bestehend, jet=jet,
+                           knaben=rel(dateien["m"]) if dateien["m"] else rel(vorschlag["m"]),
+                           maedchen=rel(dateien["w"]) if dateien["w"] else rel(vorschlag["w"]),
+                           geprueft=any(dateien.values()))
+
+
+@app.route("/konfiguration/jet", methods=["POST"])
+@superuser_required
+def jet_anlegen():
+    """Legt den Jugend-Einzelturntag (JET) gemäss WKB 2026 an."""
+    from debra.jet import anlegen
+    b = anlegen(g.db)
+    if b["neu"]:
+        flash(f"JET 2026 angelegt: {b['kategorien']} Kategorien (Mädchen/Knaben A–E).", "ok")
+    else:
+        flash(f"JET ist bereits vorhanden ({b['kategorien']} Kategorien).", "ok")
+    return redirect(url_for("einstellungen") + "#jet/import")
 
 
 # Schema beim Import aktualisieren (auch unter waitress, nicht nur bei python app.py)
 try:
     init_db()
+    _c = get_db()
+    if _c.execute("SELECT 1 FROM kategorie WHERE berechnung='jet' LIMIT 1").fetchone():
+        from debra.jet import formeln_sicherstellen
+        formeln_sicherstellen(_c)       # JET-Formeln anlegen und Tabellen daraus erzeugen
+    _c.close()
 except Exception:  # noqa: BLE001
     pass
 

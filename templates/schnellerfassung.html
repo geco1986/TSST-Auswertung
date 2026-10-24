@@ -86,7 +86,7 @@
         <span class="note">
           {% if not eintrag.ist_stafette %}Ergebnis: <strong id="live">–</strong>
           {% if eintrag.einheit %}{{ eintrag.einheit }}{% endif %} · <span class="muted">DNS/DNF möglich</span>
-          <span id="warnhinweis" style="display:none;color:#d81f2a;font-weight:600;"> · ⚠ Wert unplausibel (prüfen!)</span>&nbsp;·&nbsp;{% endif %}
+          <span id="warnhinweis" style="display:none;color:#db0016;font-weight:600;"> · ⚠ Wert unplausibel (prüfen!)</span>&nbsp;·&nbsp;{% endif %}
           mit <strong>Enter</strong> weiter.</span>
       </div>
 
@@ -118,7 +118,7 @@
       inputs.forEach(inp=>{
         const v=parseFloat((inp.value||'').replace(',','.'));
         const bad = !isNaN(v) && ((WMIN!==null && v<WMIN) || (WMAX!==null && v>WMAX));
-        inp.style.outline = bad ? '2px solid #d81f2a' : '';
+        inp.style.outline = bad ? '2px solid #db0016' : '';
         if(bad) warn=true;
       });
       const w=document.getElementById('warnhinweis');

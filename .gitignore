@@ -11,3 +11,6 @@ Inputs/
 .venv/
 __pycache__/
 *.pyc
+
+# persönliche Claude-Code-Einstellungen
+.claude/settings.local.json

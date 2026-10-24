@@ -253,8 +253,12 @@ def _zahl(v):
         return 0
 
 
-def parse_uebersicht(path):
-    """{sparte: {verein: {(abk, kat): anzahl}}} aus der Gesamtübersicht."""
+def parse_uebersicht(path, info=None):
+    """{sparte: {verein: {(abk, kat): anzahl}}} aus der Gesamtübersicht.
+
+    info (optional, dict) erhält je Sparte die Total-Zeile der Excel ("total") und
+    mehrfach aufgeführte Vereine ("doppelt") – für die Prüfung vor dem Import.
+    """
     daten = {}
     for titel, rows in _rows(path):
         sparte = _sparte(titel)
@@ -267,14 +271,19 @@ def parse_uebersicht(path):
                 aktuell = UEBERSICHT_DISZ.get(name)
             if aktuell and str(k or "").strip() in ("A", "B", "C"):
                 cols[i] = (aktuell, str(k).strip())
-        vereine = {}
+        vereine, total, doppelt = {}, None, []
         for row in rows[2:]:
             verein = str(row[0] or "").strip()
             if verein.lower().startswith("total"):
+                total = {key: _zahl(row[i]) for i, key in cols.items()}
                 break
             if verein:
+                if verein in vereine:
+                    doppelt.append(verein)
                 vereine[verein] = {key: _zahl(row[i]) for i, key in cols.items()}
         daten[sparte] = vereine
+        if info is not None:
+            info[sparte] = {"total": total, "doppelt": doppelt}
     return daten
 
 
@@ -354,10 +363,12 @@ def importieren(conn, uebersicht=None, alt=None, quelle="uebersicht"):
             info = alt.get(sparte, {}).get(verein, {})
             verband = info.get("verband") or None
             zusatz = info.get("zusatz") or default_zusatz
-            row = cur.execute("SELECT id FROM verein WHERE name=?", (verein,)).fetchone()
+            row = cur.execute("SELECT id, verband FROM verein WHERE name=?", (verein,)).fetchone()
             if row:
                 vid = row["id"]
-                if verband:
+                if not verband:
+                    verband = row["verband"]    # fehlt in der Gesamtübersicht
+                else:
                     cur.execute("UPDATE verein SET verband=? WHERE id=? AND (verband IS NULL OR verband='')",
                                 (verband, vid))
             else:

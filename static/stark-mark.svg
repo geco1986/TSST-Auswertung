@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64" role="img" aria-label="STARK">
+  <!-- STARK-Zeichen: Siegerkranz (Gold), rotes Schild mit weissem Stern
+       (Winterthurer Rot, Schweizer Fahnen-Optik), Band in ZTV-Blau -->
+  <defs>
+    <path id="b" d="M0 0 C2.6 -2.6 2.6 -8.4 0 -11 C-2.6 -8.4 -2.6 -2.6 0 0Z"/>
+  </defs>
+  <g fill="none" stroke="#c9962e" stroke-width="1.6" stroke-linecap="round">
+    <path d="M29.99 54.91 A23 23 0 0 1 20.5 12.08"/>
+    <path d="M34.01 54.91 A23 23 0 0 0 43.5 12.08"/>
+  </g>
+  <g fill="#c9962e">
+    <!-- linker Zweig: je ein Blatt aussen und innen, Spitzen in Wuchsrichtung -->
+    <use xlink:href="#b" transform="rotate(200 32 32) translate(32 9) rotate(55) scale(1)"/>
+    <use xlink:href="#b" transform="rotate(200 32 32) translate(32 9) rotate(125) scale(.75)"/>
+    <use xlink:href="#b" transform="rotate(228 32 32) translate(32 9) rotate(55) scale(.97)"/>
+    <use xlink:href="#b" transform="rotate(228 32 32) translate(32 9) rotate(125) scale(.75)"/>
+    <use xlink:href="#b" transform="rotate(256 32 32) translate(32 9) rotate(55) scale(.93)"/>
+    <use xlink:href="#b" transform="rotate(256 32 32) translate(32 9) rotate(125) scale(.72)"/>
+    <use xlink:href="#b" transform="rotate(284 32 32) translate(32 9) rotate(55) scale(.88)"/>
+    <use xlink:href="#b" transform="rotate(284 32 32) translate(32 9) rotate(125) scale(.68)"/>
+    <use xlink:href="#b" transform="rotate(311 32 32) translate(32 9) rotate(55) scale(.8)"/>
+    <use xlink:href="#b" transform="rotate(311 32 32) translate(32 9) rotate(125) scale(.6)"/>
+    <use xlink:href="#b" transform="rotate(330 32 32) translate(32 9) rotate(88) scale(.72)"/>
+    <!-- rechter Zweig (gespiegelt) -->
+    <use xlink:href="#b" transform="rotate(160 32 32) translate(32 9) rotate(-55) scale(1)"/>
+    <use xlink:href="#b" transform="rotate(160 32 32) translate(32 9) rotate(-125) scale(.75)"/>
+    <use xlink:href="#b" transform="rotate(132 32 32) translate(32 9) rotate(-55) scale(.97)"/>
+    <use xlink:href="#b" transform="rotate(132 32 32) translate(32 9) rotate(-125) scale(.75)"/>
+    <use xlink:href="#b" transform="rotate(104 32 32) translate(32 9) rotate(-55) scale(.93)"/>
+    <use xlink:href="#b" transform="rotate(104 32 32) translate(32 9) rotate(-125) scale(.72)"/>
+    <use xlink:href="#b" transform="rotate(76 32 32) translate(32 9) rotate(-55) scale(.88)"/>
+    <use xlink:href="#b" transform="rotate(76 32 32) translate(32 9) rotate(-125) scale(.68)"/>
+    <use xlink:href="#b" transform="rotate(49 32 32) translate(32 9) rotate(-55) scale(.8)"/>
+    <use xlink:href="#b" transform="rotate(49 32 32) translate(32 9) rotate(-125) scale(.6)"/>
+    <use xlink:href="#b" transform="rotate(30 32 32) translate(32 9) rotate(-88) scale(.72)"/>
+  </g>
+  <!-- Band unten -->
+  <path d="M25.5 53.5 L32 57 L38.5 53.5 L40.5 60.5 L36.6 59.2 L34.8 62.2 L32 58.6 L29.2 62.2 L27.4 59.2 L23.5 60.5 Z" fill="#0a74b5"/>
+  <!-- Schild mit Stern -->
+  <rect x="22" y="21" width="20" height="20" rx="4" fill="#db0016"/>
+  <polygon fill="#fff" points="32,23 33.88,28.41 39.61,28.53 35.04,31.99 36.70,37.47 32,34.2 27.30,37.47 28.96,31.99 24.39,28.53 30.12,28.41"/>
+</svg>

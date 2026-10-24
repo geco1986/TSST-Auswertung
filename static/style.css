@@ -1,19 +1,22 @@
 /* DEBRA-Web – Design
-   Kontext: Turnwettkampf-Auswertung. Optik einer Anzeigetafel/Zeitmessung:
-   tiefes Navy, Schweizer Rot als Akzent, Gold für Auszeichnungen,
+   Kontext: Turnwettkampf-Auswertung (Region Winterthur, Zürcher Turnverband).
+   ZTV-Dunkelblau für Sidebar/Kopf, ZTV-Blau für Aktionen, Winterthurer Rot
+   (= ZTV-Rot) als Marken-Akzent, Gold für Auszeichnungen,
    tabellarische Ziffern für Noten. Systemschriften -> offline-tauglich. */
 
 :root {
-  --ink:       #14243b;   /* tiefes Navy – Sidebar, Kopf */
-  --ink-2:     #1d3350;
-  --paper:     #eef1f5;   /* kühler heller Hintergrund */
+  --ink:       #001b4c;   /* ZTV-Dunkelblau – Sidebar, Kopf */
+  --ink-2:     #0b2f66;
+  --paper:     #eef3f9;   /* kühler heller Hintergrund, leicht blau */
   --card:      #ffffff;
-  --line:      #d3dae4;
-  --line-soft: #e6ebf1;
-  --text:      #1a2534;
-  --muted:     #5d6b7c;
-  --accent:    #d81f2a;   /* Schweizer Rot – primäre Aktionen, sparsam */
-  --accent-d:  #b3161f;
+  --line:      #d2dce8;
+  --line-soft: #e5ecf4;
+  --text:      #142338;
+  --muted:     #56677d;
+  --accent:    #0a74b5;   /* ZTV-Blau (#0a82c5) etwas dunkler für lesbare weisse Schrift */
+  --accent-d:  #075b8f;
+  --rot:       #db0016;   /* Winterthurer Rot / ZTV-Rot – Marke, Warnungen */
+  --rot-d:     #b00012;
   --gold:      #b8892b;   /* Kranz / Auszeichnung */
   --gold-bg:   #fbf3dd;
   --good:      #1f8a4c;
@@ -44,7 +47,8 @@ a:hover { text-decoration: underline; }
 .sidebar {
   width: 240px; flex: 0 0 240px;
   background: var(--ink);
-  color: #cdd7e4;
+  border-top: 4px solid var(--rot);   /* Winterthurer Rot-Weiss als Kante */
+  color: #c9d6ea;
   display: flex; flex-direction: column;
   position: sticky; top: 0; height: 100vh;
 }
@@ -57,17 +61,18 @@ a:hover { text-decoration: underline; }
   display: flex; align-items: center; gap: 10px;
 }
 .brand .logo .mark {
-  width: 26px; height: 26px; border-radius: 6px; background: var(--accent);
+  width: 26px; height: 26px; border-radius: 6px; background: var(--rot);
   display: inline-grid; place-items: center; color: #fff; font-size: 15px;
 }
-.brand small { color: #8ea3bd; font-size: 12px; }
+.brand .logo .mark-img { width: 38px; height: 38px; margin: -6px 0; }
+.brand small { color: #8ea6c8; font-size: 12px; }
 
 .nav { padding: 12px 10px; overflow-y: auto; }
-.nav .group { color: #7d92ac; font-size: 11px; letter-spacing: .08em;
+.nav .group { color: #7f97bd; font-size: 11px; letter-spacing: .08em;
   text-transform: uppercase; margin: 16px 12px 6px; }
 .nav a {
   display: flex; align-items: center; gap: 10px;
-  padding: 9px 12px; border-radius: 7px; color: #cdd7e4; font-weight: 500;
+  padding: 9px 12px; border-radius: 7px; color: #c9d6ea; font-weight: 500;
 }
 .nav a .ic { width: 18px; text-align: center; opacity: .85; }
 .nav a:hover { background: rgba(255,255,255,.06); text-decoration: none; color: #fff; }
@@ -76,9 +81,9 @@ a:hover { text-decoration: underline; }
 
 .sidebar .foot {
   margin-top: auto; padding: 14px 18px; border-top: 1px solid rgba(255,255,255,.08);
-  font-size: 13px; color: #9db2cc;
+  font-size: 13px; color: #9cb2d3;
 }
-.sidebar .foot a { color: #cfe0f2; }
+.sidebar .foot a { color: #cfe0f4; }
 
 /* ---------- Hauptbereich ---------- */
 .main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
@@ -98,7 +103,7 @@ a:hover { text-decoration: underline; }
 .druck-zeile:first-of-type { border-top: 0; }
 .druck-zeile .was { flex: 1; min-width: 220px; }
 .druck-zeile .was small { display: block; color: var(--muted); }
-.vorschau { position: fixed; inset: 0; z-index: 50; background: rgba(15, 23, 42, .72);
+.vorschau { position: fixed; inset: 0; z-index: 50; background: rgba(0, 27, 76, .72);
   display: flex; flex-direction: column; padding: 18px; }
 .vorschau[hidden] { display: none; }
 .vorschau-kopf { display: flex; align-items: center; gap: 8px; background: #fff; padding: 10px 14px;
@@ -152,7 +157,7 @@ a:hover { text-decoration: underline; }
 table { border-collapse: collapse; width: 100%; }
 th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line-soft); }
 thead th {
-  background: #f6f8fb; color: var(--muted); font-size: 12px; letter-spacing: .03em;
+  background: #f4f7fb; color: var(--muted); font-size: 12px; letter-spacing: .03em;
   position: sticky; top: 0; border-bottom: 1px solid var(--line);
 }
 tbody tr:hover { background: #f8fafc; }
@@ -189,7 +194,7 @@ input[type=text], input[type=number], input[type=date], select, textarea {
   font: inherit; background: #fff; color: var(--text);
 }
 input:focus, select:focus, textarea:focus {
-  outline: 2px solid rgba(216,31,42,.35); outline-offset: 1px; border-color: var(--accent); }
+  outline: 2px solid rgba(10,116,181,.35); outline-offset: 1px; border-color: var(--accent); }
 .checks { display: grid; grid-template-columns: repeat(auto-fill,minmax(180px,1fr)); gap: 8px; }
 .checks label { display: flex; align-items: center; gap: 8px; font-weight: 500; margin: 0;
   border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background:#fff; }
@@ -206,7 +211,7 @@ input:focus, select:focus, textarea:focus {
 .btn.primary:hover { background: var(--accent-d); border-color: var(--accent-d); }
 .btn.ghost { background: transparent; }
 .btn.sm { padding: 5px 10px; font-size: 13px; }
-.btn.danger { color: var(--accent-d); border-color: #e7b7ba; }
+.btn.danger { color: var(--rot-d); border-color: #efb3ba; }
 .btn.danger:hover { background: #fdecec; }
 .btn-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
@@ -225,13 +230,14 @@ input:focus, select:focus, textarea:focus {
 
 /* ---------- Login ---------- */
 .login-wrap { min-height: 100vh; display: grid; place-items: center; background:
-  radial-gradient(1200px 600px at 70% -10%, #21395a 0%, var(--ink) 60%); }
+  radial-gradient(1200px 600px at 70% -10%, #0a4f8a 0%, var(--ink) 60%); }
 .login-card { background: #fff; border-radius: 14px; padding: 34px 32px; width: 360px;
-  box-shadow: 0 24px 60px rgba(10,20,40,.35); }
+  border-top: 5px solid var(--rot); box-shadow: 0 24px 60px rgba(0,15,45,.4); }
 .login-card .logo { font-weight: 800; font-size: 26px; letter-spacing: .04em; color: var(--ink);
   display:flex; align-items:center; gap:10px; margin-bottom: 4px; }
-.login-card .logo .mark { width: 30px; height: 30px; border-radius: 7px; background: var(--accent);
+.login-card .logo .mark { width: 30px; height: 30px; border-radius: 7px; background: var(--rot);
   display:inline-grid; place-items:center; color:#fff; }
+.login-card .login-logo { display: block; width: 100%; height: auto; margin: 0 0 6px -4px; }
 .login-card p.sub { color: var(--muted); margin: 0 0 22px; }
 
 .empty { text-align: center; color: var(--muted); padding: 40px 20px; }
@@ -246,3 +252,95 @@ hr.soft { border: none; border-top: 1px solid var(--line-soft); margin: 20px 0; 
   .sidebar { display: none; }
   .grid-2 { grid-template-columns: 1fr; }
 }
+
+/* ---------- Anlässe klar getrennt: eigene Farbe je Anlass ---------- */
+body.anlass-tsst  { --anlass: #556B0B; --anlass-bg: #f1f4e3; }
+body.anlass-jtsst { --anlass: #0F6378; --anlass-bg: #e2f1f4; }
+body.anlass-jet   { --anlass: #7A2E8E; --anlass-bg: #f4e9f6; }
+.topbar { border-top: 4px solid var(--anlass, transparent); }
+.anlass-wahl .aktiv { background: var(--anlass, var(--accent)); }
+.anlass-band { display: flex; align-items: center; gap: 10px; margin: -6px 0 16px; padding: 8px 14px;
+  border-radius: 8px; background: var(--anlass-bg); border-left: 5px solid var(--anlass);
+  font-size: 13px; color: var(--text); }
+.anlass-band strong { color: var(--anlass); letter-spacing: .04em; }
+@media print { .anlass-band { display: none; } .topbar { border-top: 0; } }
+
+/* ---------- JET-Erfassung ---------- */
+.jet-filter label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.jet-h2 { font-size: 16px; margin: 22px 0 10px; }
+.tile .bar { height: 5px; background: var(--line-soft); border-radius: 3px; margin-top: 10px; overflow: hidden; }
+.tile .bar span { display: block; height: 100%; background: var(--anlass, var(--accent)); }
+.jet-grid th .einheit { font-size: 11px; font-weight: 400; color: var(--muted); }
+.jet-grid tr.gruppen th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; text-align: center; }
+.jet-grid .gr-geraete { background: #f6f8fc; }
+.jet-grid .gr-plausch { background: #fbf8f1; }
+.jet-grid td input { width: 66px; }
+.jet-grid input.fehler { border-color: var(--rot); background: #fff1f2; }
+.jet-note { font-size: 11px; color: var(--muted); min-height: 15px; text-align: right; padding-right: 4px; }
+.jet-note.falsch { color: var(--rot); font-weight: 600; }
+.jet-note.falsch::after { content: " →6"; }
+.jet-grid td.hinweis { font-size: 12px; color: var(--rot-d); max-width: 220px; }
+.jet-grid select.vermerk { font-size: 12px; padding: 4px; }
+.jet-werte { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.jet-werte .w { display: inline-block; margin-right: 10px; }
+.jet-werte .w b { color: var(--text); font-weight: 600; }
+.jet-werte .w.gestrichen b { color: inherit; }
+
+/* JET-Einzelerfassung: Disziplinen untereinander */
+.jet-einzel { max-width: 640px; }
+.jet-einzel-kopf { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+.jet-einzel-kopf .spacer { flex: 1; }
+.jet-nr { width: auto; padding: 2px 12px; border-radius: 8px; font-size: 18px; }
+.jet-name { font-size: 19px; }
+.jet-einzel-tab { width: 100%; border-collapse: collapse; }
+.jet-einzel-tab td, .jet-einzel-tab th { padding: 5px 8px; border-bottom: 1px solid var(--line-soft); }
+.jet-einzel-tab tr.gruppe th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--anlass, var(--muted)); padding-top: 12px; }
+.jet-einzel-tab tbody.gr-geraete td { background: #f6f8fc; }
+.jet-einzel-tab tbody.gr-plausch td { background: #fbf8f1; }
+.jet-einzel-tab input { width: 110px; font-size: 17px; text-align: right; padding: 6px 10px; }
+.jet-einzel-tab .jet-note { font-size: 15px; font-weight: 600; color: var(--text); }
+.jet-einzel-tab .jet-note.gestrichen { color: #9aa7b5; }
+.jet-einzel-tab .jet-note.falsch { color: var(--rot); }
+.jet-einzel-tab td.einheit { width: 70px; font-size: 13px; }
+.jet-total { font-size: 20px; }
+.jet-hinweis { font-size: 13px; color: var(--rot-d); min-height: 18px; margin: 8px 0; }
+.jet-vermerk { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); }
+.jet-einzel input.fehler { border-color: var(--rot); background: #fff1f2; }
+
+/* ---------- Einstellungen: Reiter je Anlass und je Art ---------- */
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 2px solid var(--line); margin-bottom: 16px; }
+.tabs button { font: inherit; font-weight: 600; font-size: 14px; padding: 9px 16px; border: 1px solid transparent;
+  border-bottom: 0; border-radius: 8px 8px 0 0; background: transparent; color: var(--muted); cursor: pointer;
+  margin-bottom: -2px; }
+.tabs button:hover { color: var(--text); background: #fff; }
+.tabs button.aktiv { background: #fff; color: var(--text); border-color: var(--line); border-bottom: 2px solid #fff; }
+.tabs.haupt button.aktiv { box-shadow: inset 0 3px 0 var(--tab-farbe, var(--accent)); }
+.tabs.unter { border-bottom-width: 1px; margin-bottom: 14px; }
+.tabs.unter button { font-size: 13px; padding: 6px 12px; font-weight: 500; }
+.tabs.unter button.aktiv { color: var(--tab-farbe, var(--accent)); font-weight: 700; }
+.tab-tsst { --tab-farbe: #556B0B; } .tab-jtsst { --tab-farbe: #0F6378; } .tab-jet { --tab-farbe: #7A2E8E; }
+.tab-seite[hidden], .tab-teil[hidden] { display: none; }
+.anlass-kopf { display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px; }
+.anlass-kopf strong { color: var(--tab-farbe); font-size: 18px; letter-spacing: .03em; }
+.jet-formeln { width: 100%; border-collapse: collapse; }
+.jet-formeln td, .jet-formeln th { padding: 6px 8px; border-bottom: 1px solid var(--line-soft); text-align: left; }
+.jet-formeln input.formel { width: 100%; font-size: 14px; }
+
+.superuser-login summary { cursor: pointer; color: var(--muted); font-size: 13px; text-align: center; padding: 6px; }
+
+/* Ranglisten-Status auf der Übersicht */
+.rl-status { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+.rl-status .st { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--line-soft); color: var(--muted); }
+.rl-status .st.ok { background: var(--good-bg); color: var(--good); font-weight: 600; }
+.rl-status .st.offen { background: #fdecee; color: var(--rot-d); font-weight: 600; }
+
+/* JET: Startnummer gut sichtbar oben */
+.jet-nr-suche { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px;
+  border-left: 5px solid var(--anlass, var(--accent)); }
+.jet-nr-suche label { font-size: 18px; font-weight: 700; margin: 0; }
+.jet-nr-suche input { width: 150px; font-size: 24px; text-align: center; padding: 6px 10px; }
+.jet-nr-suche .btn { font-size: 16px; padding: 9px 20px; }
+.jet-filter-box { margin-bottom: 16px; padding: 12px 18px; }
+.jet-filter-box summary { cursor: pointer; font-weight: 600; color: var(--muted); }
+.jet-filter-box[open] summary { margin-bottom: 12px; }

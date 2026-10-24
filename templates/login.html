@@ -2,8 +2,8 @@
 {% block loggedout %}
 <div class="login-wrap">
   <div class="login-card">
-    <div class="logo"><span class="mark">T</span> Auswertung TSST</div>
-    <p class="sub">Turnwettkampf-Auswertung</p>
+    <img class="login-logo" src="{{ url_for('static', filename='stark-logo.svg') }}" alt="STARK – Stafetten- und Turntag-Auswertung">
+    <p class="sub">Turn-, Spiel- und Stafettentag · ZTV Region Winterthur</p>
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         <div class="flashes">
@@ -21,10 +21,24 @@
         <label>Rolle wählen</label>
         <p class="muted" style="margin:0 0 12px; font-size:13px;">
           <strong>Eingeber</strong>: Teilnehmer und Resultate erfassen.<br>
-          <strong>Chef</strong>: zusätzlich Ranglisten, Stafetten-Selektion und Einstellungen.</p>
+          <strong>Chef</strong>: zusätzlich Ranglisten, Stafetten-Selektion und Einstellungen – nur im aktiven Anlass.<br>
+          <strong>Superuser</strong>: wählt den aktiven Anlass, pflegt die JET-Wertungsformeln (mit Passwort).</p>
       </div>
       <button class="btn primary" type="submit" name="rolle" value="eingeber" style="width:100%;">Als Eingeber anmelden</button>
       <button class="btn" type="submit" name="rolle" value="chef" style="width:100%;">Als Chef anmelden</button>
+      <details class="superuser-login" {{ 'open' if super_offen }}>
+        <summary>Als Superuser anmelden</summary>
+        <div class="stack" style="margin-top:10px;">
+          {% if pw_gesetzt %}
+            <input type="password" name="passwort" placeholder="Superuser-Passwort" autocomplete="current-password">
+          {% else %}
+            <p class="muted" style="margin:0; font-size:13px;">Noch kein Passwort gesetzt – jetzt festlegen (mind. 6 Zeichen).</p>
+            <input type="password" name="passwort" placeholder="Neues Passwort" autocomplete="new-password">
+            <input type="password" name="passwort2" placeholder="Passwort wiederholen" autocomplete="new-password">
+          {% endif %}
+          <button class="btn" type="submit" name="rolle" value="superuser" style="width:100%;">Als Superuser anmelden</button>
+        </div>
+      </details>
     </form>
   </div>
 </div>

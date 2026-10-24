@@ -16,7 +16,7 @@ from reportlab.pdfgen import canvas
 
 from . import rangliste_pdf as R
 
-EXCEL_AKZENT = {"tsst": "556B0B", "jtsst": "0F6378"}
+EXCEL_AKZENT = {"tsst": "556B0B", "jtsst": "0F6378", "jet": "7A2E8E"}
 
 
 @dataclass
@@ -28,13 +28,15 @@ class Spalte:
     art: str = "text"             # text | fett | rang | box | leer (Feld zum Ausfüllen)
     fmt: object = None            # Rohwert -> Text fürs PDF
     zahlformat: str = None        # Excel-Zahlenformat, z. B. "0.00"
+    nur_excel: bool = False       # Spalte nur in der Excel-Datei (im PDF als Zwischentitel)
 
 
 @dataclass
 class Abschnitt:
     titel: str = ""
     info: str = ""
-    zeilen: list = field(default_factory=list)   # dicts; "_akzent": True = Auszeichnungs-Strich
+    zeilen: list = field(default_factory=list)   # dicts; "_akzent": True = Auszeichnungs-Strich,
+    #                                              "_zwischen": Text = Zwischentitel (nur PDF)
     summe: dict = None
 
 
@@ -181,16 +183,17 @@ def _rahmen(liste, wettkampf, opt):
 
 def pdf(liste, wettkampf, opt):
     c, z, buf, kopf, (W, H, L, RR, FUSS), akzent, dunkel = _rahmen(liste, wettkampf, opt)
-    gesamt = sum(s.breite for s in liste.spalten)
+    spalten = [s for s in liste.spalten if not s.nur_excel]
+    gesamt = sum(s.breite for s in spalten)
     xs, x = [], L
-    for s in liste.spalten:
+    for s in spalten:
         w = (RR - L) * s.breite / gesamt
         xs.append((x, w))
         x += w
     zh = liste.zeilenhoehe
 
     def spaltenkopf(y):
-        for s, (x, w) in zip(liste.spalten, xs):
+        for s, (x, w) in zip(spalten, xs):
             label = z.kuerzen(s.label.upper(), "b", 7, w - 8, sperrung=0.6)
             if s.rechts:
                 z.text(x + w - 4, y + 13, label, "b", 7, R.TINTE, "r", 0.6)
@@ -246,15 +249,35 @@ def pdf(liste, wettkampf, opt):
         elif ai > 0:
             y += 12
         y = abschnittskopf(y, a)
-        for nr, zeile in enumerate(a.zeilen):
+        zwischen, nr = None, 0
+
+        def zwischentitel(y, text, fortsetzung=False):
+            z.text(L + 2, y + 14, text + ("  (Fortsetzung)" if fortsetzung else ""), "b", 9.6, akzent)
+            z.linie(y + zh + 1, L, RR, akzent, 0.5)
+            return y + zh + 3
+
+        for i, zeile in enumerate(a.zeilen):
+            if zeile.get("_zwischen"):
+                zwischen, nr = zeile["_zwischen"], 0
+                # Zwischentitel nicht allein unten auf der Seite
+                if y + 3 * zh + 3 > FUSS - 6:
+                    c.showPage()
+                    y = abschnittskopf(kopf(False), a, fortsetzung=True)
+                elif i:
+                    y += 6
+                y = zwischentitel(y, zwischen)
+                continue
             if y + zh > FUSS - 6:
                 c.showPage()
                 y = abschnittskopf(kopf(False), a, fortsetzung=True)
+                if zwischen:
+                    y = zwischentitel(y, zwischen, fortsetzung=True)
             if nr % 2:
                 z.rechteck(L, y, RR - L, zh, R.ZEBRA)
+            nr += 1
             if zeile.get("_akzent"):
                 z.rechteck(L, y + 1.5, 3.2, zh - 3, akzent)
-            for s, (x, w) in zip(liste.spalten, xs):
+            for s, (x, w) in zip(spalten, xs):
                 zelle(s, x, w, y, zeile.get(s.key), zeile)
             y += zh
         if a.summe:
@@ -262,7 +285,7 @@ def pdf(liste, wettkampf, opt):
                 c.showPage()
                 y = abschnittskopf(kopf(False), a, fortsetzung=True)
             z.linie(y + 1, L, RR, R.TINTE, 0.8)
-            for s, (x, w) in zip(liste.spalten, xs):
+            for s, (x, w) in zip(spalten, xs):
                 if s.key in a.summe:
                     zelle(s, x, w, y + 2, a.summe[s.key], a.summe, fett=True)
             y += zh + 2
@@ -344,6 +367,8 @@ def xlsx(liste, wettkampf, opt):
 
         for a in abschnitte:
             for zeile in a.zeilen:
+                if zeile.get("_zwischen"):
+                    continue                    # Zwischentitel stehen in Excel als eigene Spalte
                 zeile = dict(zeile, _abschnitt=a.titel)
                 schreiben([wert(s, zeile) for s in spalten])
             if a.summe:

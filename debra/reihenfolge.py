@@ -6,7 +6,7 @@ Standard ist die Reihenfolge der offiziellen Ranglisten 2026:
   JTSST: Mädchen vor Knaben; Disziplinen alphabetisch, je Kategorie A, B, C
 """
 
-SPARTEN = ["Turnerinnen", "Turner", "Mädchen", "Knaben"]
+SPARTEN = ["Turnerinnen", "Turner", "Mädchen", "Knaben", "JET Mädchen", "JET Knaben"]
 
 # Disziplin-Reihenfolge der Rangliste 2026 je Sparte (übrige folgen alphabetisch)
 TSST_DISZIPLINEN = {

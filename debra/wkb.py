@@ -118,13 +118,15 @@ def anwenden(conn=None):
                 ("Zeit" if einheit == "s" else "Weite", kat["id"]))
             bericht["kategorien"] += 1
 
-    # Die Software kennt nur die beiden Anlässe TSST und JTSST: übrige Wettkämpfe entfernen.
+    # Die Software kennt die drei Anlässe TSST, JTSST und JET: übrige Wettkämpfe entfernen.
     if wettkaempfe:
+        from .jet import EVENT_NAME as JET_NAME
         from .jtsst import EVENT_NAME as JTSST_NAME
         cur.execute(
-            "DELETE FROM wettkampf WHERE name<>? AND id NOT IN "
-            "(SELECT DISTINCT wettkampf_id FROM kategorie WHERE sparte IN ('Turner','Turnerinnen'))",
-            (JTSST_NAME,))
+            "DELETE FROM wettkampf WHERE name<>? AND name<>? AND id NOT IN "
+            "(SELECT DISTINCT wettkampf_id FROM kategorie WHERE sparte IN ('Turner','Turnerinnen') "
+            "OR sparte LIKE 'JET %')",
+            (JTSST_NAME, JET_NAME))
         # verwaiste Disziplinen (keiner Turner/Turnerinnen-Kategorie zugeordnet) löschen
         cur.execute(
             "DELETE FROM disziplin WHERE id NOT IN "
