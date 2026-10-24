@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_druck.html" import druckknoepfe %}
+{% import "_sparte.html" as sp %}
 {% block title %}Erfassungskontrolle{% endblock %}
 {% block content %}
 <div class="page-head"><div><h1>Erfassungskontrolle</h1><p class="sub">Wo fehlen noch Resultate?</p></div></div>
@@ -10,7 +11,10 @@
       <thead><tr><th>Disziplin</th><th class="num">Anmeldungen</th><th class="num">Erfasst</th><th class="num">Kontrolliert</th><th class="num">Fehlt</th><th style="width:160px;">Fortschritt</th><th></th></tr></thead>
       <tbody>
       {% for z in b.zeilen %}
-        <tr>
+        {% set k = z.kat %}
+        {% if loop.first or (k.sparte or '') != (loop.previtem.kat.sparte or '') %}
+          {{ sp.zeile(b.zeilen|map(attribute='kat')|list, k, 7) }}{% endif %}
+        <tr class="sparte-rand {{ sp.farbe(k) }}">
           <td><strong>{{ z.kat.bezeichnung }}</strong>{% if z.kat.ist_stafette %} <span class="pill">Stafette</span>{% endif %}{% if z.abgeschlossen %} <span class="pill" style="background:#e5f4ea;color:#1a6e3d">abgeschlossen</span>{% endif %}</td>
           <td class="num mono">{{ z.tn }}</td>
           <td class="num mono">{{ z.mit }}</td>

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_druck.html" import druckknoepfe, gesamt_warnung %}
 {% block title %}Ranglisten{% endblock %}
+{% import "_sparte.html" as sp %}
 {% block content %}
 <div class="page-head"><div><h1>Ranglisten</h1><p class="sub">Auswertung je Kategorie</p></div>
   <div class="spacer"></div>
@@ -14,13 +15,13 @@
     {{ druckknoepfe('rangliste', {'umbruch': 'fortlaufend'}, excel=False) }}</div>
 </div>
 {% if kategorien %}
-<div class="tiles">
   {% for k in kategorien %}
+    {% if sp.neu(loop, k) == 'True' %}{% if not loop.first %}{{ sp.block_zu() }}{% endif %}{{ sp.block_auf(kategorien, k) }}{% endif %}
     {% set st = status[k.id] %}
     <a class="tile" href="{{ url_for('rangliste', kid=k.id) }}">
       <div class="ic">★</div>
       <h3>{{ k.bezeichnung }}</h3>
-      <p>{% if k.sparte %}{{ k.sparte }} · {% endif %}{{ st.erledigt }}/{{ st.gruppen }} eingegeben</p>
+      <p>{{ st.erledigt }}/{{ st.gruppen }} eingegeben</p>
       <div class="rl-status">
         <span class="st {{ 'ok' if st.eingegeben else 'offen' }}" title="{{ st.offen }} ohne Resultat/Vermerk">{{ '✓' if st.eingegeben else st.offen }} Eingabe</span>
         {% if st.kontrolliert is not none %}<span class="st {{ 'ok' if st.kontrolliert else '' }}">{{ '✓ ' if st.kontrolliert }}Kontrolliert</span>{% endif %}
@@ -28,8 +29,8 @@
         <span class="st {{ 'ok' if st.fertig else '' }}" title="{{ st.fertig_von }}">{{ '✓ ' if st.fertig }}WKL</span>
       </div>
     </a>
+    {% if loop.last %}{{ sp.block_zu() }}{% endif %}
   {% endfor %}
-</div>
 {% else %}
 <div class="card empty"><p>Keine Kategorien vorhanden.</p></div>
 {% endif %}

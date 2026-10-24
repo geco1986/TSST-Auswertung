@@ -1,0 +1,20 @@
+{# Optische Trennung nach Sparte (Turnerinnen/Turner, Mädchen/Knaben).
+   Die Kategorien kommen bereits in der eingestellten Reihenfolge (sortierung). #}
+{% macro name(k) %}{{ (k.sparte or 'Weitere')|replace('JET ', '') }}{% endmacro %}
+{% macro farbe(k) %}g-{{ k.geschlecht if k.geschlecht in ('m', 'w') else 'alle' }}{% endmacro %}
+{% macro neu(loop, k) %}{{ loop.first or (k.sparte or '') != (loop.previtem.sparte or '') }}{% endmacro %}
+
+{# Kachel-Seiten: Kopf eines Sparten-Blocks öffnen bzw. schliessen #}
+{% macro block_auf(alle, k) %}
+<section class="sparte-block {{ farbe(k) }}">
+  <h2 class="sparte-kopf">{{ name(k) }}
+    <span class="anz">{{ alle|selectattr('sparte', 'equalto', k.sparte)|list|length }} Kategorien</span></h2>
+  <div class="tiles">
+{% endmacro %}
+{% macro block_zu() %}</div></section>{% endmacro %}
+
+{# Tabellen: Zwischenzeile je Sparte #}
+{% macro zeile(alle, k, spalten) %}
+<tr class="sparte-zeile {{ farbe(k) }}"><th colspan="{{ spalten }}">{{ name(k) }}
+  <span class="anz">· {{ alle|selectattr('sparte', 'equalto', k.sparte)|list|length }} Kategorien</span></th></tr>
+{% endmacro %}

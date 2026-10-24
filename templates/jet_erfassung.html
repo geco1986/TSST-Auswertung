@@ -58,7 +58,8 @@
     direkt die nächste Nummer eingeben.</p></div>
 {% elif not aktiv %}
   {% for sparte, g_, praefix, kurz in jet.SPARTEN %}
-    <h2 class="jet-h2">{{ kurz }}</h2>
+    <section class="sparte-block g-{{ g_ }}">
+    <h2 class="sparte-kopf">{{ kurz }}</h2>
     <div class="tiles">
       {% for u in uebersicht if u.k.geschlecht == g_ %}
         <a class="tile" href="{{ url_for('jet_erfassung', kat=u.k.id) }}">
@@ -69,6 +70,7 @@
         </a>
       {% endfor %}
     </div>
+    </section>
   {% endfor %}
   {% if not uebersicht %}
     <div class="card empty"><p>Der JET hat noch keine Kategorien.</p></div>

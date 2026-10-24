@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Übersicht{% endblock %}
+{% import "_sparte.html" as sp %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -34,7 +35,8 @@
       </tr></thead>
       <tbody>
       {% for k in kategorien %}
-        <tr>
+        {% if sp.neu(loop, k) == 'True' %}{{ sp.zeile(kategorien, k, 6) }}{% endif %}
+        <tr class="sparte-rand {{ sp.farbe(k) }}">
           <td><strong>{{ k.bezeichnung }}</strong>{% if k.abk %} <span class="pill">{{ k.abk }}</span>{% endif %}</td>
           <td>{{ KATEGORIE_TYPEN.get(k.typ, k.typ) }}</td>
           <td class="num">{{ k.tn }}</td>

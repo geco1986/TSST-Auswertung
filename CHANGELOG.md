@@ -2,6 +2,11 @@
 
 Alle wesentlichen Änderungen an DEBRA-Web.
 
+## [0.7.2] – 2026-10-24
+- Optische Trennung nach Sparte (Turnerinnen/Turner, Mädchen/Knaben) in der Erfassung, den
+  Ranglisten, auf der Übersicht und in der Erfassungskontrolle – eigener Block bzw. Zwischenzeile
+  mit Farbe je Sparte.
+
 ## [0.7.1] – 2026-10-24
 - Alle Importe per Upload im Browser (Dateien oder ZIP): DEBRA-Backup TSST, Excel TSST + JTSST,
   JTSST-Anmeldungen, JET-Anmeldungen (Backup, Excel, Startliste-PDF) und Vorjahr. Uploads liegen

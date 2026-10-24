@@ -346,3 +346,16 @@ body.anlass-jet   { --anlass: #7A2E8E; --anlass-bg: #f4e9f6; }
 .jet-filter-box[open] summary { margin-bottom: 12px; }
 
 .sidebar .foot .version { margin-top: 10px; font-size: 11px; opacity: .6; letter-spacing: .03em; }
+
+/* ---------- Optische Trennung nach Sparte (Turnerinnen/Turner, Mädchen/Knaben) ---------- */
+.g-m    { --sp: #1f5fa8; --sp-bg: #eef4fb; }
+.g-w    { --sp: #b03a6e; --sp-bg: #fbf0f5; }
+.g-alle { --sp: #56677d; --sp-bg: #f2f5f9; }
+.sparte-block { margin: 0 0 22px; padding: 14px 16px 16px; border-radius: 12px;
+  background: var(--sp-bg); border-left: 6px solid var(--sp); }
+.sparte-kopf { display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px;
+  font-size: 19px; color: var(--sp); letter-spacing: .01em; }
+.sparte-kopf .anz, .sparte-zeile .anz { font-size: 13px; color: var(--muted); font-weight: 400; }
+tr.sparte-zeile th { background: var(--sp-bg); color: var(--sp); border-left: 5px solid var(--sp);
+  font-size: 15px; text-align: left; padding: 10px 12px; }
+tr.sparte-rand td:first-child { border-left: 5px solid var(--sp-bg); }
