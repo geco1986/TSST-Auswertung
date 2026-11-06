@@ -72,6 +72,11 @@ Kurz: Dataset (z. B. `pool/apps/tsst-auswertung`) anlegen → Apps → *Custom A
 und `DEBRA_SECRET` anpassen) → installieren → `http://<TrueNAS-IP>:5000`.
 Das GHCR-Paket muss dafür **öffentlich** sein (siehe TRUENAS.md).
 
+## Intel NUC (eigenständiger Server)
+Wettkampf-Server mit DHCP fürs Kabelnetz, Passwortschutz für den Zugriff von aussen und
+DuckDNS/Tailscale: siehe **[NUC.md](NUC.md)**. Die Installationskarte erstellt
+`nuc\sd-karte-erstellen.ps1`.
+
 ## Konfiguration (Umgebungsvariablen)
 | Variable        | Default                | Bedeutung |
 |-----------------|------------------------|-----------|

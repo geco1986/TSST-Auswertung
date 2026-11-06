@@ -1,0 +1,14 @@
+[Unit]
+Description=TSST-Auswertung Ersteinrichtung (Docker, DHCP, Caddy, DuckDNS)
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/etc/tsst/.installed
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/tsst-install/setup.sh
+TimeoutStartSec=0
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -2,6 +2,12 @@
 
 Alle wesentlichen Änderungen an DEBRA-Web.
 
+## [Unveröffentlicht]
+- Intel NUC als eigenständiger Wettkampf-Server (`nuc/`, Anleitung `NUC.md`): Installationskarte
+  per Skript (Ubuntu Server 24.04 autoinstall auf die interne Disk), DHCP-Server im Kabelnetz
+  (ohne Passwort), Zugriff über WLAN/Internet nur mit Passwort (Caddy), DuckDNS-Updater und
+  optional Tailscale Funnel.
+
 ## [0.7.2] – 2026-10-24
 - Optische Trennung nach Sparte (Turnerinnen/Turner, Mädchen/Knaben) in der Erfassung, den
   Ranglisten, auf der Übersicht und in der Erfassungskontrolle – eigener Block bzw. Zwischenzeile
