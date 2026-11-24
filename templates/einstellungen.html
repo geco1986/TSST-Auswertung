@@ -94,7 +94,7 @@
       <button type="button" data-teil="anlass">Anlass</button>
       <button type="button" data-teil="auszeichnungen">Auszeichnungen</button>
       {% if a.stafetten %}<button type="button" data-teil="stafetten">Stafetten</button>{% endif %}
-      {% if art != 'jet' %}<button type="button" data-teil="zeitplan">Zeitplan &amp; Plausibilität</button>{% endif %}
+      {% if art != 'jet' %}<button type="button" data-teil="zeitplan">Plausibilität</button>{% endif %}
       {% if art == 'jet' %}<button type="button" data-teil="wertung">Wertungstabelle</button>{% endif %}
     {% endif %}
     <button type="button" data-teil="import">{{ 'Import & WKB' if art == 'tsst' else ('Anlegen & Import' if art == 'jtsst' else 'Anlegen & Import') }}</button>
@@ -175,18 +175,16 @@
 
     {% if art != 'jet' %}
     <div class="tab-teil card" data-teil="zeitplan">
-      <h3 style="margin-top:0;">Zeitplan &amp; Plausibilität pro Disziplin</h3>
-      <p class="muted" style="font-size:13px;margin:0 0 8px;">Anlagen und Zeit je Sportler:in steuern den Zeitplan-Generator.
-        Warn-Min/Max lösen bei der Eingabe eine Warnung aus (nur Hinweis).</p>
+      <h3 style="margin-top:0;">Plausibilität pro Disziplin</h3>
+      <p class="muted" style="font-size:13px;margin:0 0 8px;">Warn-Min/Max lösen bei der Eingabe eine Warnung aus (nur Hinweis).
+        Anlagen und Zeit je Turner:in: Seite <a href="{{ url_for('einsatzplan') }}">Einsatzplan</a>.</p>
       <div class="table-wrap" style="border:none;">
         <table>
-          <thead><tr><th>Disziplin</th><th>Anlagen</th><th>Zeit/Turner (Min.)</th><th>Warn min</th><th>Warn max</th></tr></thead>
+          <thead><tr><th>Disziplin</th><th>Warn min</th><th>Warn max</th></tr></thead>
           <tbody>
           {% for k in a.kategorien %}
             <tr>
               <td><strong>{{ k.bezeichnung }}</strong> <span class="muted">{{ k.sparte or '' }}</span></td>
-              <td><input type="number" min="1" name="anl_{{ k.id }}" value="{{ k.anlagen or 1 }}" style="width:70px"></td>
-              <td><input type="number" step="0.1" name="zpt_{{ k.id }}" value="{{ '%g'|format(k.zeit_pro_turner or 0) }}" style="width:90px"></td>
               <td><input type="number" step="0.01" name="wmin_{{ k.id }}" value="{{ '%g'|format(k.warn_min) if k.warn_min is not none else '' }}" style="width:90px"></td>
               <td><input type="number" step="0.01" name="wmax_{{ k.id }}" value="{{ '%g'|format(k.warn_max) if k.warn_max is not none else '' }}" style="width:90px"></td>
             </tr>
@@ -278,6 +276,20 @@
         <button class="btn" type="submit">JTSST-Anmeldungen importieren</button>
       </form>
       {% else %}<p class="muted" style="font-size:13px;"><strong>Nur der Superuser</strong> kann Importe durchführen.</p>{% endif %}
+      <hr class="soft">
+      <h3>Vorjahres-Rangliste</h3>
+      <p class="muted" style="font-size:13px;">Grundlage der Serieneinteilung (Pendelstafette, Hindernislauf, Schwedenstafette)
+        und der Gruppeneinteilung im Seilziehen. Aktuell <strong>{{ vorjahr_jtsst_n }}</strong> Resultate gespeichert.
+        <a href="{{ url_for('vorjahr_ansicht') }}">Ansehen</a></p>
+      {% if ist_superuser %}
+      <form method="post" action="{{ url_for('vorjahr_import') }}" enctype="multipart/form-data" class="stack" style="max-width:none;">
+        <input type="hidden" name="anlass" value="jtsst">
+        <label>Gesamt-Rangliste JTSST hochladen <span class="hint">(PDF, z. B. 2026-JTSST-Gesamt.pdf)</span></label>
+        <input type="file" name="dateien" accept=".pdf" style="max-width:none;">
+        <input type="text" name="pdf_pfad" placeholder="oder PDF auf dem Server, z. B. Inputs6-JTSST-Gesamt.pdf">
+        <button class="btn" type="submit">Vorjahr importieren</button>
+      </form>
+      {% endif %}
     {% else %}
       <h3 style="margin-top:0;">Jugend-Einzelturntag (JET 2026)</h3>
       <p class="muted">Eigener Anlass gemäss WKB JET 2026 (05.07.2026, Rheinau): Mädchen/Knaben Kat. A–C (6-Kampf) und

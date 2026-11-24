@@ -67,7 +67,7 @@
         {% if d.berechnung == 'durchschnitt' %}· Durchschnitt aus {{ d.anzahl_werte }}{% if d.einheit %} ({{ d.einheit }}){% endif %}
         {% elif d.anzahl_werte == 1 %}· Zeit{% if d.einheit %} ({{ d.einheit }}){% endif %}{% endif %}
         · {{ 'tiefer = besser' if d.richtung == 'tief' else 'höher = besser' }}
-        {% if kat.kranz_modus == 'rang' %}· Auszeichnung bis Rang {{ kat.kranz_wert|round(0)|int }}{% else %}· Auszeichnung beste {{ kat.kranz_wert|round(0)|int }} %{% endif %}
+        {% if kat.kranz_modus == 'rang' %}· Auszeichnung bis Rang {{ kat.kranz_wert|round(0)|int }}{% elif kat.kranz_modus == 'finalrunde' %}· Auszeichnung beste {{ kat.kranz_wert|round(0)|int }} %, ganze Runden{% else %}· Auszeichnung beste {{ kat.kranz_wert|round(0)|int }} %{% endif %}
       </p>
       <table>
         <thead><tr>

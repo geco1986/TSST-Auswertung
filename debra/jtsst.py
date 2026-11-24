@@ -92,8 +92,9 @@ def _wertung(abk):
                  zuschlag_a=0.0, zuschlag_b=0.0, zuschlag_a_label=None, zuschlag_b_label=None,
                  bahnen=8, warn_min=None, warn_max=None)
     if abk == "SZ":
+        # Auszeichnung nach ganzen Runden (höchstens 30 %), siehe debra/seilziehen.py
         basis.update(berechnung="summe", anzahl_werte=1, richtung="tief", einheit="Rang",
-                     warn_min=1, warn_max=64)
+                     warn_min=1, warn_max=128, kranz_modus="finalrunde")
     elif abk == "PS":
         basis.update(ist_stafette=1, richtung="tief", einheit="s", zuschlag_a=2.0,
                      zuschlag_a_label="Übergabefehler/Fehlstart", zuschlag_b_label="—")
@@ -146,6 +147,9 @@ def _angleichen(cur, wk):
         kuerzel, bez, nr = _debra(sparte, kat, abk)
         cur.execute("UPDATE kategorie SET abk=?, bezeichnung=?, kat_nr=? WHERE id=?",
                     (kuerzel, bez, nr, k["id"]))
+        if abk == "SZ":
+            cur.execute("UPDATE kategorie SET kranz_modus='finalrunde' WHERE id=? AND kranz_modus='prozent'",
+                        (k["id"],))
         n += 1
     return n
 
@@ -352,7 +356,7 @@ def importieren(conn, uebersicht=None, alt=None, quelle="uebersicht"):
     kats = _kategorien(cur, wk)
 
     cur.execute("DELETE FROM teilnehmer WHERE wettkampf_id=?", (wk,))
-    bericht = {"gruppen": 0, "vereine": 0, "je_sparte": {}, "fehlende_kategorien": []}
+    bericht = {"gruppen": 0, "vereine": 0, "je_sparte": {}, "fehlende_kategorien": [], "wettkampf_id": wk}
     meldeschluss = {}   # kategorie_id -> angemeldete Gruppen (Basis der Auszeichnungen)
 
     for sparte in ("Knaben", "Mädchen"):

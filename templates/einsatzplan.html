@@ -2,34 +2,136 @@
 {% from "_druck.html" import druckknoepfe %}
 {% block title %}Einsatzplan{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Zeitplan / Einsatzplan (Vormittag)</h1>
-  <p class="sub">Gruppen auf Anlagen und Startzeiten verteilen</p></div></div>
+<div class="page-head"><div><h1>Einsatzplan</h1>
+  <p class="sub">{{ 'Riegen' if cfg.jet else 'Gruppen' }} auf Anlagen, Startzeiten und Ablösungen verteilen</p></div></div>
+
+<form method="post" action="{{ url_for('einsatzplan_einstellungen') }}">
 
 <div class="card" style="margin-bottom:16px;">
-  <form method="post" action="{{ url_for('einsatzplan_generieren') }}" class="btn-row" style="align-items:end;gap:14px;">
-    <div><label>Startzeit</label><input type="time" name="startzeit" value="{{ startzeit }}" style="width:120px"></div>
-    <button class="btn primary" type="submit">Einsatzplan generieren</button>
-  </form>
-  <div class="druck-zeile" style="margin-top:10px;"><div class="was"><strong>Nach Anlage</strong></div>
+  <h3 style="margin-top:0;">Ablösungen</h3>
+  <div class="btn-row" style="align-items:end;gap:14px;flex-wrap:wrap;">
+    <div><label>Anzahl Ablösungen</label>
+      <select name="abloesungen" style="width:90px">
+        {% for n in range(1, max_abl + 1) %}<option value="{{ n }}" {{ 'selected' if n == cfg.abloesungen }}>{{ n }}</option>{% endfor %}
+      </select></div>
+    {% for s in cfg.starts %}
+      <div><label>Start Ablösung {{ loop.index }}</label>
+        <input type="time" name="start_{{ loop.index }}" value="{{ s }}" style="width:120px"></div>
+    {% endfor %}
+    {% if cfg.jet %}
+      <div><label>Max. Riegengrösse</label>
+        <input type="number" min="1" max="60" name="riege_max" value="{{ cfg.riege_max }}" style="width:90px"></div>
+    {% endif %}
+  </div>
+  {% if cfg.abloesungen > 1 %}
+  <p class="muted" style="font-size:13px;margin:8px 0 0;">Leere Startzeit = direkt nach der vorherigen Ablösung.
+    Die Vereine werden so verteilt, dass die Ablösungen gleich gross sind; Knaben und Mädchen eines Vereins
+    sind immer in derselben Ablösung.</p>
+  {% endif %}
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+  <h3 style="margin-top:0;">Anlagen je Disziplin</h3>
+  <p class="muted" style="font-size:13px;margin:0 0 8px;">Gilt für alle Kategorien{{ ', Knaben und Mädchen gemeinsam' if cfg.jet else ' und beide Sparten gemeinsam' }}.
+    <strong>Anlagen</strong> = wie viele gleiche Anlagen es gibt (0 = nicht im Einsatzplan),
+    <strong>Minuten</strong> = Zeit je Turner:in auf der Anlage, bei Gruppenvorführungen (z.&nbsp;B. Gymnastik, „Zeit je Gruppe“) je Gruppe.
+    <strong>Schätzbar</strong>: jede Kategorie bleibt auf derselben Anlage (gleiche Wertungsrichter:innen).
+    <strong>Verteilen</strong> (nur nicht schätzbare Disziplinen mit mehreren Anlagen): eine {{ 'Riege' if cfg.jet else 'Gruppe' }}
+    wird gleichzeitig auf alle Anlagen aufgeteilt – z.&nbsp;B. Klettern: der Verein klettert an allen Wänden miteinander.</p>
+  <div class="table-wrap" style="border:none;">
+    <table>
+      <thead><tr><th>Disziplin</th><th class="num">{{ 'Turner:innen' if cfg.jet else 'Gruppen' }}</th>
+        <th>Anlagen</th><th>Minuten</th><th>Zeit je</th><th>Schätzbar</th><th>Verteilen</th></tr></thead>
+      <tbody>
+      {% for d in diszs %}
+        <tr>
+          <td><strong>{{ d.name }}</strong> {% if d.gruppe %}<span class="muted">{{ d.gruppe }}</span>{% endif %}
+            {% if not cfg.jet %}<span class="muted">· {{ d.kats|length }} Kategorie{{ 'n' if d.kats|length != 1 }}</span>{% endif %}</td>
+          <td class="num mono">{{ d.n }}</td>
+          <td><input type="number" min="0" max="20" name="anl_{{ d.key }}" value="{{ d.anlagen }}" style="width:70px"></td>
+          <td><input type="number" min="0" step="0.1" name="min_{{ d.key }}" value="{{ '%g'|format(d.minuten) }}" style="width:90px">
+            {% if not d.minuten and d.anlagen %}<span class="muted" style="font-size:12px;">({{ 10 }} Min. je Einsatz)</span>{% endif %}</td>
+          <td><select name="je_{{ d.key }}" style="width:130px">
+            <option value="turner" {{ 'selected' if not d.pro_gruppe }}>Turner:in</option>
+            <option value="gruppe" {{ 'selected' if d.pro_gruppe }}>Gruppe</option></select></td>
+          <td><input type="checkbox" name="sch_{{ d.key }}" value="1" {{ 'checked' if d.schaetzbar }}></td>
+          <td><input type="checkbox" name="vt_{{ d.key }}" value="1" {{ 'checked' if d.verteilen }}
+               title="Nur wirksam, wenn nicht schätzbar und mehr als 1 Anlage"></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="muted">Keine Disziplinen.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if cfg.jet %}
+  <p class="muted" style="font-size:13px;margin:8px 0 0;">JET: Die Turner:innen eines Vereins bilden Riegen (Knaben bzw. Mädchen,
+    höchstens „Max. Riegengrösse“, nach Kategorie sortiert) und besuchen miteinander alle Disziplinen ihres Programms.
+    Bei schätzbaren Disziplinen turnen die Kategorien der Riege gleichzeitig, jede auf ihrer Anlage;
+    bei „Zeit je Gruppe“ zählt jede Kategorie der Riege als eine Gruppe.</p>
+  {% endif %}
+</div>
+
+{% if cfg.abloesungen > 1 %}
+<div class="card" style="margin-bottom:16px;">
+  <h3 style="margin-top:0;">Vereine je Ablösung</h3>
+  <div class="btn-row" style="gap:18px;margin-bottom:8px;flex-wrap:wrap;">
+    {% for a, s in summen.items() %}
+      <div><strong>Ablösung {{ a }}:</strong> <span class="mono">{{ s.n }}</span> {{ 'Turner:innen' if cfg.jet else 'Gruppen' }}
+        <span class="muted">({{ s.w }} w / {{ s.m }} m · {{ s.vereine }} Vereine)</span></div>
+    {% endfor %}
+  </div>
+  <div class="table-wrap" style="border:none;">
+    <table>
+      <thead><tr><th>Verein</th><th class="num">Mädchen / w</th><th class="num">Knaben / m</th><th class="num">Total</th><th>Ablösung</th></tr></thead>
+      <tbody>
+      {% for v in vereine %}
+        <tr><td><strong>{{ v.name }}</strong></td>
+          <td class="num mono">{{ v.w }}</td><td class="num mono">{{ v.m }}</td><td class="num mono">{{ v.n }}</td>
+          <td><select name="abl_{{ v.verein_id }}" style="width:80px">
+            {% for n in range(1, cfg.abloesungen + 1) %}<option value="{{ n }}" {{ 'selected' if n == v.abl }}>{{ n }}</option>{% endfor %}
+          </select></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="savebar speichern" style="margin-bottom:16px;">
+  <button class="btn primary" type="submit" name="aktion" value="generieren">Speichern &amp; Einsatzplan generieren</button>
+  <button class="btn" type="submit" name="aktion" value="speichern">Nur speichern</button>
+  {% if cfg.abloesungen > 1 %}
+  <button class="btn" type="submit" name="aktion" value="ausgleichen"
+          onclick="return confirm('Alle Vereine automatisch neu auf die Ablösungen verteilen?')">Ablösungen automatisch ausgleichen</button>
+  {% endif %}
+</div>
+</form>
+
+<div class="card" style="margin-bottom:16px;">
+  <h3 style="margin-top:0;">Drucken</h3>
+  <div class="druck-zeile"><div class="was"><strong>Nach Anlage</strong></div>
     {{ druckknoepfe('einsatzplan', {'nach': 'anlage'}, klein=True) }}</div>
   <div class="druck-zeile"><div class="was"><strong>Nach Verein</strong></div>
     {{ druckknoepfe('einsatzplan', {'nach': 'verein'}, klein=True) }}</div>
-  <p class="muted" style="font-size:13px;margin:8px 0 0;">
-    Dauer je Gruppe = <em>Zeit/Turner × Gruppengrösse</em>; Anlagen &amp; Zeit/Turner unter
-    <a href="{{ url_for('einstellungen') }}">Einstellungen</a>. Heuristik ohne Konflikt-Prüfung über Vereine – bei Bedarf manuell anpassen.</p>
 </div>
 
+{% if belegung %}
 <div class="table-wrap">
   <table>
-    <thead><tr><th>Disziplin</th><th class="num">Gruppen</th><th class="num">Anlagen</th><th class="num">Zeit/Turner (Min.)</th></tr></thead>
+    <thead><tr>{% if cfg.abloesungen > 1 %}<th class="num">Abl.</th>{% endif %}<th>Anlage</th><th>Von</th><th>Bis</th>
+      <th class="num">{{ 'Riegen' if cfg.jet else 'Gruppen' }}</th>{% if cfg.jet %}<th class="num">Turner:innen</th>{% endif %}<th>Kategorien</th></tr></thead>
     <tbody>
-    {% for k in kats %}
-      <tr><td><strong>{{ k.bezeichnung }}</strong> <span class="muted">{{ k.wk_name.split('–')[-1].strip() }}</span></td>
-        <td class="num mono">{{ k.anz }}</td>
-        <td class="num mono">{{ k.anlagen or 1 }}</td>
-        <td class="num mono">{{ '%g'|format(k.zeit_pro_turner or 0) }}</td></tr>
+    {% for a in belegung %}
+      <tr>{% if cfg.abloesungen > 1 %}<td class="num mono">{{ a.abloesung }}</td>{% endif %}
+        <td><strong>{{ a.anlage }}</strong></td><td class="mono">{{ a.von }}</td><td class="mono">{{ a.bis }}</td>
+        <td class="num mono">{{ a.einsaetze }}</td>{% if cfg.jet %}<td class="num mono">{{ a.personen }}</td>{% endif %}
+        <td class="muted" style="font-size:13px;">{{ a.kats|join(', ') }}</td></tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
+{% else %}
+<p class="muted">Noch kein Einsatzplan erzeugt.</p>
+{% endif %}
 {% endblock %}

@@ -142,15 +142,15 @@ a:hover { text-decoration: underline; }
 .stat .label { color: var(--muted); font-size: 13px; margin-top: 2px; }
 
 /* Modulkacheln auf dem Dashboard */
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 14px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px,1fr)); gap: 8px; }
 .tile {
   display: block; background: #fff; border: 1px solid var(--line);
-  border-radius: 10px; padding: 18px; color: var(--text);
+  border-radius: 8px; padding: 8px 11px; color: var(--text);
 }
 .tile:hover { border-color: var(--ink-2); text-decoration: none; box-shadow: 0 1px 0 var(--ink-2); }
-.tile .ic { font-size: 22px; }
-.tile h3 { margin: 8px 0 2px; font-size: 16px; }
-.tile p { margin: 0; color: var(--muted); font-size: 13px; }
+.tile .ic { float: left; font-size: 14px; line-height: 20px; margin-right: 6px; }
+.tile h3 { margin: 0 0 1px; font-size: 14px; line-height: 20px; }
+.tile p { margin: 0; color: var(--muted); font-size: 12px; clear: left; }
 
 /* ---------- Tabellen ---------- */
 .table-wrap { background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: auto; }
@@ -268,7 +268,7 @@ body.anlass-jet   { --anlass: #7A2E8E; --anlass-bg: #f4e9f6; }
 /* ---------- JET-Erfassung ---------- */
 .jet-filter label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
 .jet-h2 { font-size: 16px; margin: 22px 0 10px; }
-.tile .bar { height: 5px; background: var(--line-soft); border-radius: 3px; margin-top: 10px; overflow: hidden; }
+.tile .bar { height: 4px; background: var(--line-soft); border-radius: 3px; margin-top: 6px; overflow: hidden; }
 .tile .bar span { display: block; height: 100%; background: var(--anlass, var(--accent)); }
 .jet-grid th .einheit { font-size: 11px; font-weight: 400; color: var(--muted); }
 .jet-grid tr.gruppen th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; text-align: center; }
@@ -330,8 +330,8 @@ body.anlass-jet   { --anlass: #7A2E8E; --anlass-bg: #f4e9f6; }
 .superuser-login summary { cursor: pointer; color: var(--muted); font-size: 13px; text-align: center; padding: 6px; }
 
 /* Ranglisten-Status auf der Übersicht */
-.rl-status { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
-.rl-status .st { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--line-soft); color: var(--muted); }
+.rl-status { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; }
+.rl-status .st { font-size: 10px; padding: 1px 6px; border-radius: 999px; background: var(--line-soft); color: var(--muted); }
 .rl-status .st.ok { background: var(--good-bg); color: var(--good); font-weight: 600; }
 .rl-status .st.offen { background: #fdecee; color: var(--rot-d); font-weight: 600; }
 
@@ -351,10 +351,10 @@ body.anlass-jet   { --anlass: #7A2E8E; --anlass-bg: #f4e9f6; }
 .g-m    { --sp: #1f5fa8; --sp-bg: #eef4fb; }
 .g-w    { --sp: #b03a6e; --sp-bg: #fbf0f5; }
 .g-alle { --sp: #56677d; --sp-bg: #f2f5f9; }
-.sparte-block { margin: 0 0 22px; padding: 14px 16px 16px; border-radius: 12px;
+.sparte-block { margin: 0 0 16px; padding: 10px 12px 12px; border-radius: 12px;
   background: var(--sp-bg); border-left: 6px solid var(--sp); }
-.sparte-kopf { display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px;
-  font-size: 19px; color: var(--sp); letter-spacing: .01em; }
+.sparte-kopf { display: flex; align-items: baseline; gap: 10px; margin: 0 0 8px;
+  font-size: 17px; color: var(--sp); letter-spacing: .01em; }
 .sparte-kopf .anz, .sparte-zeile .anz { font-size: 13px; color: var(--muted); font-weight: 400; }
 tr.sparte-zeile th { background: var(--sp-bg); color: var(--sp); border-left: 5px solid var(--sp);
   font-size: 15px; text-align: left; padding: 10px 12px; }

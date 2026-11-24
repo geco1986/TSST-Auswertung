@@ -8,6 +8,7 @@ Konfiguration über Umgebungsvariablen:
   DEBRA_SECRET  Secret-Key für Sessions (unbedingt setzen)
   DEBRA_SEED    "1" = bei leerer DB Demo-Daten laden, "0" (Default) = nicht
   HOST / PORT   Bind-Adresse/Port (Default 0.0.0.0:5000)
+  DEBRA_URL_PREFIX  Optionaler Unterpfad, z. B. /tsst (die App bleibt auch unter / erreichbar)
 """
 import os
 
@@ -28,9 +29,26 @@ def _seed_wenn_leer():
 
 _seed_wenn_leer()
 
+
+class Unterpfad:
+    """Bedient die App zusätzlich unter einem Pfad-Präfix (z. B. hinter dem Tunnel)."""
+
+    def __init__(self, wsgi_app, praefix):
+        self.wsgi_app = wsgi_app
+        self.praefix = praefix
+
+    def __call__(self, environ, start_response):
+        pfad = environ.get("PATH_INFO", "")
+        if pfad == self.praefix or pfad.startswith(self.praefix + "/"):
+            environ["SCRIPT_NAME"] = self.praefix
+            environ["PATH_INFO"] = pfad[len(self.praefix):] or "/"
+        return self.wsgi_app(environ, start_response)
+
+
 if __name__ == "__main__":
     from waitress import serve
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("PORT", "5000"))
     print(f"Auswertung TSST läuft auf http://{host}:{port}  (Rolle beim Login wählen)")
-    serve(app, host=host, port=port, threads=8)
+    praefix = os.environ.get("DEBRA_URL_PREFIX", "").rstrip("/")
+    serve(Unterpfad(app, praefix) if praefix else app, host=host, port=port, threads=8)

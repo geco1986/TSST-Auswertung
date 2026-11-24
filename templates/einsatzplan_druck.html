@@ -11,24 +11,21 @@
   @media print{ .toolbar{ display:none; } body{ margin:0; } }
 </style></head><body>
 <div class="toolbar"><button class="btn" onclick="window.print()">Drucken / als PDF speichern</button></div>
-<h1>Einsatzplan Vormittag — {{ 'nach Anlage' if nach=='anlage' else 'nach Verein' }}</h1>
+<h1>Einsatzplan — {{ 'nach Anlage' if nach=='anlage' else 'nach Verein' }}</h1>
 {% for g in gruppen %}
   <div class="grp">
     <h2>{{ g.kopf }}</h2>
     <table>
-      <thead><tr><th class="n">Zeit</th>
-        {% if nach=='anlage' %}<th class="n">Start</th><th>Verein / Gruppe</th><th>Disziplin</th>
-        {% else %}<th class="n">Start</th><th>Disziplin</th><th>Anlage</th>{% endif %}</tr></thead>
+      <thead><tr><th class="n">Abl.</th><th>Zeit</th>
+        {% if nach=='anlage' %}<th>Verein / Gruppe</th>{% else %}<th>Anlage</th>{% endif %}
+        <th>Kategorie</th><th class="n">Anz.</th></tr></thead>
       <tbody>
       {% for r in g.zeilen %}
-        <tr><td class="n">{{ r.startzeit }}</td>
+        <tr><td class="n">{{ r.abloesung }}</td><td>{{ r.von }}–{{ r.bis }}</td>
           {% if nach=='anlage' %}
-            <td class="n">{{ r.startnr }}</td>
-            <td>{{ r.verein_name }}{% if r.verein_zusatz %} {{ r.verein_zusatz }}{% endif %}{% if r.gruppennr %} ({{ r.gruppennr }}){% endif %}</td>
-            <td>{{ r.kat_name }}</td>
-          {% else %}
-            <td class="n">{{ r.startnr }}</td><td>{{ r.kat_name }}</td><td>{{ r.anlage }}</td>
-          {% endif %}
+            <td>{{ r.verein }}{% if r.zusatz %} {{ r.zusatz }}{% endif %}{% if r.gruppennr %} ({{ r.gruppennr }}){% endif %}</td>
+          {% else %}<td>{{ r.anlage }}</td>{% endif %}
+          <td>{{ r.kat }}</td><td class="n">{{ r.anzahl }}</td>
         </tr>
       {% endfor %}
       </tbody>

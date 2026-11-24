@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Seilziehen{% endblock %}
+{% import "_sparte.html" as sp %}
+{% block content %}
+<div class="page-head"><div><h1>Seilziehen</h1><p class="sub">K.-o.-Tableau: Runden und Freilose aus der Teilnehmerzahl · Einteilung nach Vorjahr · Eingabe nach dem Blatt</p></div>
+  <div class="spacer"></div>
+  {% if kategorien %}<a class="btn primary" href="{{ url_for('seilziehen_turnierbaum') }}" target="_blank">Alle Turnierbäume drucken</a>{% endif %}</div>
+  {% for k in kategorien %}
+    {% if sp.neu(loop, k) == 'True' %}{% if not loop.first %}{{ sp.block_zu() }}{% endif %}{{ sp.block_auf(kategorien, k) }}{% endif %}
+    <a class="tile" href="{{ url_for('seilziehen_eingabe', kid=k.id) }}">
+      <div class="ic">⇹</div>
+      <h3>{{ k.bezeichnung }}</h3>
+      <p>{{ k.anz }} Gruppen · {% if k.erfasst %}erfasst{% else %}offen{% endif %}</p>
+    </a>
+    {% if loop.last %}{{ sp.block_zu() }}{% endif %}
+  {% else %}
+  <div class="card empty"><p>Dieser Anlass hat kein Seilziehen.</p></div>
+  {% endfor %}
+{% endblock %}

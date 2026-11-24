@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Teilnehmer{% endblock %}
+{% import "_sparte.html" as sp %}
 {% block content %}
 <div class="page-head">
   <div><h1>Teilnehmer</h1><p class="sub">Vorerfassung der Teilnehmenden (tabTeilnehmer)</p></div>
@@ -21,14 +22,14 @@
 {% if zu_gross %}
   <div class="card">
     <p class="muted" style="margin:0 0 12px;">Dieser Wettkampf hat viele Anmeldungen. Wähle oben eine Kategorie, um die Liste anzuzeigen und zu bearbeiten.</p>
-    <div class="tiles">
       {% for k in kategorien %}
+        {% if sp.neu(loop, k) == 'True' %}{% if not loop.first %}{{ sp.block_zu() }}{% endif %}{{ sp.block_auf(kategorien, k) }}{% endif %}
         <a class="tile" href="{{ url_for('teilnehmer', kategorie=k.id) }}">
           <h3 style="font-size:15px;">{{ k.bezeichnung }}</h3>
           <p>{{ k.n }} Anmeldungen{% if k.abk %} · {{ k.abk }}{% endif %}</p>
         </a>
+        {% if loop.last %}{{ sp.block_zu() }}{% endif %}
       {% endfor %}
-    </div>
   </div>
 {% else %}
 
@@ -43,7 +44,11 @@
     </tr></thead>
     <tbody>
     {% for t in liste %}
-      <tr>
+      {% if sp.neu(loop, t) == 'True' %}
+        <tr class="sparte-zeile {{ sp.farbe(t) }}"><th colspan="8">{{ sp.name(t) }}
+          <span class="anz">· {{ liste|selectattr('sparte', 'equalto', t.sparte)|list|length }} Anmeldungen</span></th></tr>
+      {% endif %}
+      <tr class="sparte-rand {{ sp.farbe(t) }}">
         <td><input class="rowsel" type="checkbox" name="sel" value="{{ t.id }}"></td>
         <td class="num mono">{{ t.startnr }}</td>
         <td>
@@ -54,7 +59,7 @@
           {% endif %}
         </td>
         <td class="num mono">{{ t.jahrgang or '' }}</td>
-        <td>{{ t.geschlecht or '' }}</td>
+        <td>{{ t.geschlecht_tn or '' }}</td>
         <td>{{ t.verein_name or '—' }}{% if t.verband %} <span class="muted" style="font-size:12px;">{{ t.verband }}</span>{% endif %}</td>
         <td>{{ t.kat_name or '—' }}</td>
         <td class="right btn-row" style="justify-content:flex-end;">

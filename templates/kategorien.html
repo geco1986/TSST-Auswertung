@@ -35,6 +35,8 @@
         <td>
           {% if k.kranz_modus == 'prozent' %}beste {{ k.kranz_wert|round(0)|int }} %
           {% elif k.kranz_modus == 'schwelle' %}ab {{ '%.2f'|format(k.kranz_wert) }}
+          {% elif k.kranz_modus == 'rang' %}bis Rang {{ k.kranz_wert|round(0)|int }}
+          {% elif k.kranz_modus == 'finalrunde' %}beste {{ k.kranz_wert|round(0)|int }} %, ganze Runden
           {% else %}keine{% endif %}
         </td>
         <td class="right btn-row" style="justify-content:flex-end;">

@@ -62,6 +62,16 @@ docker run -d --name auswertung-tsst -p 5000:5000 \
   auswertung-tsst
 ```
 
+## Raspberry Pi (ohne Docker)
+Läuft als Dienst `tsst-auswertung` auf Port **5000** (`pi/start.sh`, Unit `pi/tsst-auswertung.service`),
+mit venv in `.venv/`, Datenbank `data/debra.sqlite3` und Session-Secret `data/secret.txt`.
+```bash
+sudo apt install poppler-utils
+sudo cp pi/tsst-auswertung.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now tsst-auswertung
+journalctl -fu tsst-auswertung    # Log
+```
+
 ## TrueNAS SCALE
 Fertiges Image: **`ghcr.io/geco1986/tsst-auswertung:latest`** – ausführliche
 Schritt-für-Schritt-Anleitung in **[TRUENAS.md](TRUENAS.md)**, passende Vorlage

@@ -228,6 +228,39 @@ CREATE TABLE IF NOT EXISTS zeitplan (
     sortierung    INTEGER NOT NULL DEFAULT 0
 );
 
+-- Einsatzplan: Anlagen und Zeit je Disziplin (für alle Kategorien und beide Geschlechter gemeinsam)
+CREATE TABLE IF NOT EXISTS einsatz_disziplin (
+    wettkampf_id  INTEGER NOT NULL REFERENCES wettkampf(id) ON DELETE CASCADE,
+    disziplin     TEXT NOT NULL,          -- JET: Kürzel (BO, RE …); sonst Disziplin-Name
+    anlagen       INTEGER NOT NULL DEFAULT 1,
+    minuten       REAL NOT NULL DEFAULT 0, -- Minuten je Turner:in auf der Anlage
+    schaetzbar    INTEGER NOT NULL DEFAULT 0, -- 1 = gleiche Kategorie immer auf gleicher Anlage
+    pro_gruppe    INTEGER NOT NULL DEFAULT 0, -- 1 = Minuten je Gruppe (Gruppenvorführung) statt je Turner:in
+    verteilen     INTEGER,                -- 1 = Riege gleichzeitig auf alle Anlagen verteilen (nur nicht schätzbar)
+    PRIMARY KEY (wettkampf_id, disziplin)
+);
+
+-- Einsatzplan: Ablösung je Verein (Knaben und Mädchen eines Vereins gemeinsam)
+CREATE TABLE IF NOT EXISTS einsatz_abloesung (
+    wettkampf_id  INTEGER NOT NULL REFERENCES wettkampf(id) ON DELETE CASCADE,
+    verein_id     INTEGER NOT NULL,       -- 0 = ohne Verein
+    abloesung     INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (wettkampf_id, verein_id)
+);
+
+-- Einsatzplan: ein Einsatz je Teilnehmer:in und Disziplin
+CREATE TABLE IF NOT EXISTS einsatz (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    wettkampf_id  INTEGER NOT NULL REFERENCES wettkampf(id) ON DELETE CASCADE,
+    teilnehmer_id INTEGER NOT NULL REFERENCES teilnehmer(id) ON DELETE CASCADE,
+    disziplin     TEXT,
+    anlage        TEXT,
+    abloesung     INTEGER NOT NULL DEFAULT 1,
+    start         INTEGER,                -- Minuten ab Mitternacht
+    ende          INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_einsatz_wk ON einsatz(wettkampf_id);
+
 -- Zusatzblätter der Gesamt-Rangliste (Deckblatt, Sponsoren, Fundbüro, Werbung …) als PDF.
 -- position: anfang | ende | vor_sparte:<Sparte> | nach_sparte:<Sparte> | nach_kat:<kategorie_id>
 CREATE TABLE IF NOT EXISTS zusatzblatt (
@@ -318,9 +351,13 @@ def _migrate(conn):
             ("total_off", "REAL"), ("rang_off", "INTEGER"), ("ausz_off", "INTEGER"),
             ("verein_zusatz", "TEXT"), ("verband", "TEXT"), ("gruppennr", "INTEGER"),
             ("stationsnr", "TEXT"),
+            ("sz_runde", "TEXT"),     # JTSST Seilziehen: erreichte Runde (debra/seilziehen.py)
         ],
         "resultat": [
             ("wert", "REAL"), ("status", "TEXT"), ("erfasst_von", "TEXT"), ("erfasst_am", "TEXT"),
+        ],
+        "einsatz_disziplin": [
+            ("pro_gruppe", "INTEGER NOT NULL DEFAULT 0"), ("verteilen", "INTEGER"),
         ],
         "stafette": [
             ("serie", "INTEGER"), ("bahn", "INTEGER"),
@@ -338,6 +375,9 @@ def _migrate(conn):
             if name not in vorhanden:
                 try:
                     conn.execute(f"ALTER TABLE {tabelle} ADD COLUMN {name} {ddl}")
+                    if (tabelle, name) == ("einsatz_disziplin", "pro_gruppe"):
+                        # Gymnastik ist eine Gruppenvorführung: Zeit je Gruppe
+                        conn.execute("UPDATE einsatz_disziplin SET pro_gruppe=1 WHERE disziplin='GYM'")
                 except sqlite3.OperationalError:
                     pass
     conn.commit()

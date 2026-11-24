@@ -1,0 +1,75 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8">
+<title>Turnierbaum Seilziehen</title>
+<style>
+  *{ box-sizing:border-box; }
+  @page{ size:A4 portrait; margin:9mm 8mm; }
+  body{ font-family:Arial,Helvetica,sans-serif; color:#111; margin:0; background:#fff; }
+  .toolbar{ padding:12px 18px; }
+  .btn{ padding:8px 16px;border:1px solid #999;border-radius:8px;background:#001b4c;color:#fff;cursor:pointer;font:inherit; }
+  .blatt{ width:194mm; margin:0 auto 10mm; page-break-after:always; break-after:page; }
+  .blatt:last-child{ page-break-after:auto; break-after:auto; }
+  .kopf{ display:flex; justify-content:space-between; align-items:flex-end; border-bottom:0.5mm solid #111;
+         padding-bottom:1.5mm; margin-bottom:1mm; }
+  .kopf h1{ font-size:14pt; margin:0; }
+  .kopf .info{ font-size:8pt; text-align:right; }
+  .runden{ position:relative; height:4.5mm; }
+  .runden div{ position:absolute; font-size:7.5pt; font-weight:bold; text-align:center; }
+  .baum{ position:relative; }
+  .baum svg{ position:absolute; left:0; top:0; overflow:visible; }
+  .box{ position:absolute; border:0.25mm solid #111; background:#fff; display:flex; flex-direction:column; }
+  .linie{ flex:1; display:flex; align-items:center; gap:1.2mm; padding:0 1mm; overflow:hidden; white-space:nowrap;
+          font-size:var(--schrift); line-height:1; }
+  .linie + .linie{ border-top:0.2mm solid #888; }
+  .linie .nr{ font-weight:bold; min-width:7mm; font-variant-numeric:tabular-nums; }
+  .linie .leer{ color:#bbb; }
+  .linie.hinweis{ font-style:italic; color:#666; }
+  .linie.ll{ font-size:calc(var(--schrift) * 0.85); justify-content:flex-end; }
+  .zug{ position:absolute; left:0; width:3.4mm; text-align:right; font-size:6pt; color:#666; transform:translateY(-50%); }
+  .extra{ position:absolute; bottom:0; font-size:7.5pt; }
+  .extra .box{ position:relative; margin:0.8mm 0 2mm; }
+  .extra .linie{ height:5.5mm; flex:none; }
+  .legende{ font-size:7pt; color:#444; margin-top:1mm; }
+  .warn{ font-size:8pt; color:#a4161d; margin:1mm 0; }
+  @media print{ .toolbar{ display:none; } .blatt{ margin:0; } }
+</style></head><body>
+<div class="toolbar"><button class="btn" onclick="window.print()">Drucken</button>
+  {% if not baeume %}<p>Keine Seilziehen-Gruppen eingeteilt.</p>{% endif %}</div>
+
+{% macro linie(l) -%}
+  {%- if l is none -%}<div class="linie"><span class="nr leer">____</span></div>
+  {%- elif l.freilos -%}<div class="linie hinweis">Freilos</div>
+  {%- elif l.lucky_loser -%}<div class="linie hinweis ll">Lucky Loser</div>
+  {%- else -%}<div class="linie"><span class="nr">{{ l.startnr }}</span><span>{{ l.name }}</span></div>
+  {%- endif -%}
+{%- endmacro %}
+
+{% for b in baeume %}
+{% set t = b.baum %}
+<div class="blatt" style="--schrift:{{ '6.4pt' if t.zeile < 8 else ('7.6pt' if t.zeile < 13 else '9pt') }};">
+  <div class="kopf">
+    <div><h1>{{ b.kat.bezeichnung }}</h1></div>
+    <div class="info">{{ wettkampf.name }}<br>{{ b.anzahl }} Gruppen · Turnierbaum Seilziehen</div>
+  </div>
+  {% if b.ohne %}<p class="warn">{{ b.ohne }} Gruppe(n) noch nicht eingeteilt.</p>{% endif %}
+  <div class="runden">{% for s in t.spalten %}<div style="left:{{ s.x }}mm;width:{{ s.w }}mm">{{ s.name }}</div>{% endfor %}</div>
+  <div class="baum" style="height:{{ t.hoehe }}mm">
+    <svg width="{{ t.breite }}mm" height="{{ t.hoehe }}mm" viewBox="0 0 {{ t.breite }} {{ t.hoehe }}">
+      {% for p in t.linien %}<path d="{{ p }}" fill="none" stroke="#111" stroke-width="0.25"/>{% endfor %}
+    </svg>
+    {% for x in t.boxen %}
+      {% if x.zug %}<span class="zug" style="top:{{ x.y + x.h / 2 }}mm">{{ x.zug }}</span>{% endif %}
+      <div class="box" style="left:{{ x.x }}mm;top:{{ x.y }}mm;width:{{ x.w }}mm;height:{{ x.h }}mm">
+        {% for l in x.linien %}{{ linie(l) }}{% endfor %}</div>
+    {% endfor %}
+    <div class="extra" style="left:{{ t.sieger_x - 2 }}mm;width:{{ t.sieger_w + 2 }}mm">
+      <b>Spiel um Platz 3</b>
+      <div class="box" style="width:100%">{{ linie(none) }}{{ linie(none) }}</div>
+      <b>Rangierung</b>
+      <div class="box" style="width:100%">{% for p in range(1, 5) %}<div class="linie"><span class="nr">{{ p }}.</span><span class="leer">________________</span></div>{% endfor %}</div>
+    </div>
+  </div>
+  <p class="legende">{{ b.aufbau.zuege }} Züge in der 1. Runde{% if b.aufbau.freilos %}, 1 Freilos{% endif %}
+    {%- if b.aufbau.lucky_loser %} · Lucky Loser: in {{ b.aufbau.lucky_loser }} Runde(n) kommt ein Verlierer weiter (Feld „Lucky Loser“){% endif %}.</p>
+</div>
+{% endfor %}
+</body></html>

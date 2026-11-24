@@ -1,14 +1,32 @@
 {% extends "base.html" %}
 {% block title %}Stafetten{% endblock %}
+{% import "_sparte.html" as sp %}
 {% block content %}
-<div class="page-head"><div><h1>Stafetten – Selektion &amp; Bahnen</h1><p class="sub">Zeiten erfassen, Finalteilnehmer selektieren, Bahnen zuteilen</p></div></div>
-<div class="tiles">
+<div class="page-head"><div><h1>Stafetten – Selektion &amp; Bahnen</h1><p class="sub">Zeiten erfassen, Finalteilnehmer selektieren, Bahnen zuteilen</p></div>
+{% if jtsst %}<div class="spacer"></div>
+  <form method="post" action="{{ url_for('jtsst_selektion_neu') }}" onsubmit="return confirm('Pendelstafette und Seilziehen neu einteilen? Kategorien mit erfassten Resultaten bleiben unverändert.')">
+    <button class="btn" type="submit">Alle neu einteilen</button></form>{% endif %}
+</div>
+{% if jtsst %}<p class="muted">JTSST: Serien der Pendelstafette (Vorjahresbeste in der letzten Serie) und Seilziehen-Tableau
+  (Freilose, Setzung nach Vorjahr) teilt das Tool automatisch ein – nach dem Import der Anmeldungen bzw. des Vorjahres
+  und beim Öffnen, solange noch nichts eingeteilt ist. Manuell anpassbar.</p>{% endif %}
   {% for k in kategorien %}
-    <a class="tile" href="{{ url_for('stafette_verwalten', kid=k.id) }}">
+    {% if sp.neu(loop, k) == 'True' %}{% if not loop.first %}{{ sp.block_zu() }}{% endif %}{{ sp.block_auf(kategorien, k) }}{% endif %}
+    {% if k.einheit == 'Rang' %}
+    <a class="tile" href="{{ url_for('seilziehen_gruppen', kid=k.id) }}">
+      <div class="ic">⇹</div>
+      <h3>{{ k.bezeichnung }}</h3>
+      <p>K.-o.-Tableau</p>
+    </a>
+    {% else %}
+    <a class="tile" href="{{ url_for('stafette_bahnen', kid=k.id) if jtsst and k.bezeichnung.startswith('Pendelstafette') else url_for('stafette_verwalten', kid=k.id) }}">
       <div class="ic">⇄</div>
       <h3>{{ k.bezeichnung }}</h3>
-      <p>{{ k.wk_name.split('–')[-1].strip() }}{% if k.hat_final %} · {{ 'A/B-Final' if k.final_typ=='ab' else 'Final (8)' }}{% else %} · Endlauf{% endif %}</p>
+      <p>{% if k.hat_final %}{{ 'A/B-Final' if k.final_typ=='ab' else 'Final (8)' }}{% else %}Endlauf{% endif %}</p>
     </a>
+    {% endif %}
+    {% if loop.last %}{{ sp.block_zu() }}{% endif %}
+  {% else %}
+  <div class="card empty"><p>Dieser Anlass hat keine Stafetten.</p></div>
   {% endfor %}
-</div>
 {% endblock %}

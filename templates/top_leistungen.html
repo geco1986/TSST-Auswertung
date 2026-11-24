@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_druck.html" import druckknoepfe %}
 {% block title %}Top-Leistungen{% endblock %}
+{% import "_sparte.html" as sp %}
 {% block content %}
 <div class="page-head"><div><h1>Top-Leistungen</h1><p class="sub">Aktuell beste Leistung je Disziplin – für den Speaker</p></div>
   <div class="spacer"></div>
@@ -13,7 +14,10 @@
       <thead><tr><th>Disziplin</th><th>Führende Gruppe</th><th class="num">Bestwert</th></tr></thead>
       <tbody>
       {% for z in b.zeilen %}
-        <tr>
+        {% set k = z.kat %}
+        {% if loop.first or (k.sparte or '') != (loop.previtem.kat.sparte or '') %}
+          {{ sp.zeile(b.zeilen|map(attribute='kat')|list, k, 3) }}{% endif %}
+        <tr class="sparte-rand {{ sp.farbe(k) }}">
           <td><strong>{{ z.kat.bezeichnung }}</strong></td>
           <td>{% if z.beste %}{{ z.beste.anzeige }}{% else %}<span class="muted">–</span>{% endif %}</td>
           <td class="num total">

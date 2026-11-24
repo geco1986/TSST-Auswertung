@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Seilziehen {{ kat.bezeichnung }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Seilziehen – {{ kat.bezeichnung }}</h1>
+    <p class="sub">Vom Blatt übernehmen: Plätze 1–4 und die Ausgeschiedenen je Runde (ein Lucky Loser zählt in der Runde, in der er endgültig ausschied). Nicht aufgeführte Gruppen
+      bleiben auf „{{ RUNDEN[erste][0] }}“. Die Ausgeschiedenen einer Runde teilen sich den Platz;
+      ausgezeichnet werden ganze Runden (höchstens {{ (kat.kranz_wert or 30)|round(0)|int }} %).</p></div>
+  <div class="spacer"></div>
+  <a class="btn" href="{{ url_for('seilziehen_turnierbaum', kid=kat.id) }}" target="_blank">Turnierbaum</a>
+  {% if ist_chef %}<a class="btn" href="{{ url_for('seilziehen_gruppen', kid=kat.id) }}">Einteilung</a>
+  <a class="btn" href="{{ url_for('rangliste', kid=kat.id) }}">Rangliste ansehen →</a>{% endif %}
+</div>
+
+{% if teams %}
+<div class="card" style="margin-bottom:14px;">
+  <p style="margin:0;"><strong>{{ teams|rejectattr('status')|list|length }} Gruppen</strong> · erste Runde {{ aufbau.erste }}:
+    {{ aufbau.zuege }} Züge{% if aufbau.freilos %}, 1 Freilos{% endif %}{% if aufbau.lucky_loser %} · Lucky Loser in {{ aufbau.lucky_loser }} Runde(n){% endif %}</p>
+  <p class="muted" style="margin:4px 0 0;font-size:13px;">Erwartet:
+    {% for stufe, soll in aufbau.stufen %}{{ RUNDEN[stufe][0] }}{% if stufe not in ('p1','p2','p3','p4') %} {{ soll }}{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}
+    {% if ausz is not none %} — gespeichert, <strong>{{ ausz }}</strong> Auszeichnungen{% endif %}</p>
+</div>
+{% endif %}
+
+{% if not teams %}
+  <div class="card empty"><p>Noch keine Gruppen in dieser Disziplin.</p></div>
+{% else %}
+<form method="post">
+  <div class="table-wrap">
+    <table class="sortable">
+      <thead><tr><th class="num">Start</th><th>Verein</th><th class="num">Gr.</th>
+        <th class="no-sort">Erreicht</th><th class="num">Rang</th></tr></thead>
+      <tbody>
+      {% for t in teams %}
+        <tr>
+          <td class="num mono">{{ t.startnr }}</td>
+          <td><strong>{{ t.verein_name or '—' }}</strong>{% if t.verein_zusatz %} {{ t.verein_zusatz }}{% endif %}</td>
+          <td class="num">{{ t.gruppennr or '' }}</td>
+          <td>{% if t.status %}<span class="pill">{{ t.status }}</span>
+            {% else %}
+            <select name="runde_{{ t.id }}">
+              {% for stufe, _ in aufbau.stufen|reverse %}
+                <option value="{{ stufe }}" {{ 'selected' if runden.get(t.id, erste) == stufe }}>{{ RUNDEN[stufe][0] }}</option>
+              {% endfor %}
+            </select>{% endif %}</td>
+          <td class="num total">{{ raenge.get(t.id, '') }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="savebar">
+    <button class="btn primary" type="submit" name="aktion" value="speichern">Speichern &amp; rangieren</button>
+    {% if runden %}<button class="btn ghost" type="submit" name="aktion" value="leeren"
+      onclick="return confirm('Seilziehen-Eingabe dieser Kategorie löschen?')">Eingabe löschen</button>{% endif %}
+  </div>
+</form>
+{% endif %}
+{% endblock %}

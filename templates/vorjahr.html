@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Vorjahres-Rangliste{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Vorjahres-Rangliste (Stafetten)</h1>
-  <p class="sub">Grundlage für die automatische Bahnen-/Serieneinteilung</p></div></div>
+<div class="page-head"><div><h1>Vorjahres-Rangliste ({{ 'JTSST' if jtsst else 'Stafetten' }})</h1>
+  <p class="sub">Grundlage für die automatische {{ 'Serien- und Seilziehen-Gruppeneinteilung' if jtsst else 'Bahnen-/Serieneinteilung' }} – gesetzt wird nur mit Gruppe 1 je Verein</p></div></div>
 {% if not bloecke %}
   <div class="card empty"><p>Noch keine Vorjahresdaten. Import unter <a href="{{ url_for('einstellungen') }}">Einstellungen</a>.</p></div>
 {% endif %}
@@ -15,7 +15,7 @@
         <tbody>
         {% for r in zeilen %}
           <tr><td class="num">{{ r.rang }}</td><td>{{ r.verein }}</td><td class="num">{{ r.gruppennr or '' }}</td>
-            <td class="num total">{{ fmt_zeit(r.zeit) }}</td></tr>
+            <td class="num total">{{ fmt_zeit(r.zeit) if r.zeit is not none else '' }}</td></tr>
         {% endfor %}
         </tbody>
       </table>

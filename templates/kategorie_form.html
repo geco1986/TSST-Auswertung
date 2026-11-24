@@ -110,6 +110,7 @@ function toggleKranz(){
   if(m === 'keiner'){ wrap.style.display='none'; return; }
   wrap.style.display='block';
   if(m === 'prozent'){ label.textContent='Anteil in %'; hint.textContent='Die besten X % der Kategorie erhalten eine Auszeichnung.'; }
+  else if(m === 'finalrunde'){ label.textContent='Anteil in %'; hint.textContent='Seilziehen: ganze Runden werden ausgezeichnet, solange der Anteil nicht überschritten wird.'; }
   else if(m === 'rang'){ label.textContent='Bis Rang'; hint.textContent='Alle bis und mit diesem Rang erhalten eine Auszeichnung.'; }
   else { label.textContent='Total-Schwelle'; hint.textContent='Alle ab diesem Total erhalten eine Auszeichnung.'; }
 }

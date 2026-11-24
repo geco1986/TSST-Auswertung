@@ -8,7 +8,8 @@
 {% macro block_auf(alle, k) %}
 <section class="sparte-block {{ farbe(k) }}">
   <h2 class="sparte-kopf">{{ name(k) }}
-    <span class="anz">{{ alle|selectattr('sparte', 'equalto', k.sparte)|list|length }} Kategorien</span></h2>
+    <span class="anz">{{ alle|selectattr('sparte', 'equalto', k.sparte)|list|length }}
+      {{ 'Stafetten' if k.ist_stafette and alle|rejectattr('ist_stafette')|list|length == 0 else 'Kategorien' }}</span></h2>
   <div class="tiles">
 {% endmacro %}
 {% macro block_zu() %}</div></section>{% endmacro %}

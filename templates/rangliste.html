@@ -12,6 +12,8 @@
       {% if daten.richtung == 'tief' %}tiefer = besser{% else %}höher = besser{% endif %} ·
       {% if kat.kranz_modus=='prozent' %}Auszeichnung: beste {{ kat.kranz_wert|round(0)|int }} %
       {% elif kat.kranz_modus=='schwelle' %}Auszeichnung ab {{ '%.2f'|format(kat.kranz_wert) }}
+      {% elif kat.kranz_modus=='rang' %}Auszeichnung bis Rang {{ kat.kranz_wert|round(0)|int }}
+      {% elif kat.kranz_modus=='finalrunde' %}Auszeichnung: beste {{ kat.kranz_wert|round(0)|int }} %, nur ganze Runden
       {% else %}ohne Auszeichnung{% endif %}</p></div>
   <div class="spacer"></div>
   {% if daten.modus == 'stafette' %}<a class="btn" href="{{ url_for('stafette_verwalten', kid=kat.id) }}">Erfassen</a>

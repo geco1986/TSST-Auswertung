@@ -172,30 +172,42 @@ def statistik(conn, wk, args):
 # Einsatzplan
 # --------------------------------------------------------------------------- #
 def einsatzplan(conn, wk, args):
+    from . import einsatzplan as E
     nach = args.get("nach", "anlage")
-    rows = conn.execute(
-        "SELECT t.startnr, t.gruppennr, t.anlage, t.startzeit, v.name AS verein, k.sparte, k.bezeichnung "
-        "FROM teilnehmer t LEFT JOIN verein v ON v.id=t.verein_id JOIN kategorie k ON k.id=t.kategorie_id "
-        f"WHERE k.ist_stafette=0 AND t.startzeit IS NOT NULL AND t.wettkampf_id=? AND {OHNE_ABGEMELDETE}",
-        (wk["id"],)).fetchall()
-    zeit = Spalte("startzeit", "Zeit", 0.7)
-    start = Spalte("startnr", "Start-Nr.", 0.8, True, zahlformat="0")
+    rows = E.eintraege(conn, wk)
+    mehrere = len({r["abloesung"] for r in rows}) > 1
+    zeit = Spalte("zeit", "Zeit", 1.0)
+    abl = [Spalte("abloesung", "Abl.", 0.5, True, zahlformat="0")] if mehrere else []
+    anz = Spalte("anzahl", "Anz.", 0.5, True, zahlformat="0")
+    start = Spalte("startnr", "Start-Nr.", 1.2)
+
+    def gruppe(r):
+        return " ".join(x for x in (r["verein"], r["zusatz"], str(r["gruppennr"] or "")) if x).strip() or "—"
+
     if nach == "verein":
-        schluessel, label = (lambda r: r["verein"] or "—"), "Verein"
-        spalten = [zeit, start, Spalte("gruppe", "Gruppe", 1.6, art="fett"), Spalte("disziplin", "Disziplin", 2.6),
-                   Spalte("anlage", "Anlage", 1.8)]
+        schluessel, label = (lambda r: f"{r['verein']} {r['zusatz']}".strip() or "—"), "Verein"
+        spalten = abl + [zeit, Spalte("anlage", "Anlage", 1.8, art="fett"), Spalte("kat", "Kategorie", 2.4),
+                         anz, start]
     else:
         schluessel, label = (lambda r: r["anlage"] or "—"), "Anlage"
-        spalten = [zeit, start, Spalte("gruppe", "Verein / Gruppe", 2.4, art="fett"),
-                   Spalte("disziplin", "Disziplin", 2.6)]
+        spalten = abl + [zeit, Spalte("gruppe", "Verein / Gruppe", 2.2, art="fett"),
+                         Spalte("kat", "Kategorie", 2.4), anz, start]
+
+    def nummern(r):
+        nr = r["startnr"]
+        if len(nr) <= 3:
+            return ", ".join(str(n) for n in nr)
+        return f"{nr[0]}–{nr[-1]}" if nr[-1] - nr[0] + 1 == len(nr) else f"{nr[0]} … {nr[-1]}"
+
     abschnitte = []
-    for kopf, grp in groupby(sorted(rows, key=lambda r: (schluessel(r).lower(), r["startzeit"] or "")), key=schluessel):
+    for kopf, grp in groupby(sorted(rows, key=lambda r: (schluessel(r).lower(), r["abloesung"], r["start"])),
+                             key=schluessel):
         grp = list(grp)
-        abschnitte.append(Abschnitt(kopf, f"{len(grp)} Einsätze", [
-            {"startzeit": r["startzeit"], "startnr": r["startnr"], "gruppe": _gruppe(r["verein"], None, r["gruppennr"]),
-             "disziplin": R._titel({"bezeichnung": r["bezeichnung"], "sparte": r["sparte"]}) +
-             (f" ({r['sparte']})" if r["sparte"] else ""), "anlage": r["anlage"]} for r in grp]))
-    return Liste("EINSATZPLAN", f"Einsatzplan Vormittag nach {label}", spalten, abschnitte,
+        abschnitte.append(Abschnitt(kopf, f"{len(grp)} Einsätze · {sum(r['anzahl'] for r in grp)} Pers.", [
+            {"abloesung": r["abloesung"], "zeit": f"{r['von']}–{r['bis']}", "gruppe": gruppe(r),
+             "kat": r["kat"],
+             "anlage": r["anlage"], "anzahl": r["anzahl"], "startnr": nummern(r)} for r in grp]))
+    return Liste("EINSATZPLAN", f"Einsatzplan nach {label}", spalten, abschnitte,
                  f"{len(rows)} Einsätze" if rows else "Noch kein Einsatzplan erzeugt",
                  abschnitt_label=label, neue_seite=nach == "verein", dateiname=f"Einsatzplan_nach_{label}")
 

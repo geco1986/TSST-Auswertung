@@ -37,6 +37,7 @@
       {{ navlink('teilnehmer', '☰', 'Teilnehmer', '/teilnehmer') }}
       {{ navlink('mutation', '⇌', 'Mutation') }}
       {{ navlink('erfassung_index', '✎', 'Nach Disziplin', '/erfassung') }}
+      {% if anlass_art == 'jtsst' %}{{ navlink('seilziehen_index', '⇹', 'Seilziehen', '/seilziehen') }}{% endif %}
       {% endif %}
       {{ navlink('erfassungskontrolle', '◱', 'Erfassungskontrolle') }}
       {{ navlink('kontrollblatt', '✓', 'Kontrollblatt') }}
@@ -61,7 +62,7 @@
 
       <div class="group">Listen</div>
       {{ navlink('listen', '▤', 'Listen & Statistik') }}
-      {{ navlink('einsatzplan', '◷', 'Einsatzplan (Vormittag)') }}
+      {{ navlink('einsatzplan', '◷', 'Einsatzplan') }}
       {{ navlink('notenblaetter', '▦', 'Notenblätter/Startlisten') }}
       {{ navlink('zeitplan', '☷', 'Zeitplan (Import)') }}
 
@@ -96,7 +97,7 @@
           {% set aktiv = w and aktueller_wettkampf and w['id'] == aktueller_wettkampf['id'] %}
           {% if ist_superuser and not aktiv %}
             <form method="post" action="{{ url_for('anlass_wechseln', art=art) }}">
-              <input type="hidden" name="zurueck" value="{{ request.path }}">
+              <input type="hidden" name="zurueck" value="{{ request.script_root }}{{ request.path }}">
               <button type="submit" title="{{ w['name'] if w else label ~ ' noch nicht angelegt' }}"
                       {{ 'class=leer' if not w }}>{{ label }}</button>
             </form>

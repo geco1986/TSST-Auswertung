@@ -24,7 +24,8 @@ app.config["MAX_CONTENT_LENGTH"] = 256 * 1024 * 1024     # Upload von Import-Dat
 GERAETE_EINHEITEN = ["Note", "Zeit", "Weite", "Hoehe", "Anzahl"]
 KATEGORIE_TYPEN = {"einzel": "Einzel", "sektion": "Sektion", "gruppe": "Gruppe"}
 KRANZ_MODI = {"keiner": "Keine Auszeichnung", "prozent": "Beste X %",
-              "rang": "Bis Rang X", "schwelle": "Ab Total-Schwelle"}
+              "rang": "Bis Rang X", "schwelle": "Ab Total-Schwelle",
+              "finalrunde": "Beste X %, ganze Runden (Seilziehen)"}
 
 
 # --------------------------------------------------------------------------- #
@@ -34,7 +35,7 @@ def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
         if not session.get("user"):
-            return redirect(url_for("login", next=request.path))
+            return redirect(url_for("login", next=request.script_root + request.path))
         return view(*args, **kwargs)
     return wrapped
 
@@ -82,7 +83,7 @@ def chef_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
         if not session.get("user"):
-            return redirect(url_for("login", next=request.path))
+            return redirect(url_for("login", next=request.script_root + request.path))
         if not _ist_chef():
             flash("Dieser Bereich ist nur für die Rolle „Chef“.", "error")
             return redirect(url_for("dashboard"))
@@ -94,7 +95,7 @@ def superuser_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
         if not session.get("user"):
-            return redirect(url_for("login", next=request.path))
+            return redirect(url_for("login", next=request.script_root + request.path))
         if not _ist_superuser():
             flash("Dieser Bereich ist nur für den Superuser.", "error")
             return redirect(url_for("dashboard"))
@@ -644,15 +645,19 @@ def teilnehmer():
     liste = []
     zu_gross = gesamt > 300 and not kat_filter
     if not zu_gross:
-        sql = ("SELECT t.*, v.name AS verein_name, k.bezeichnung AS kat_name "
+        sql = ("SELECT t.*, v.name AS verein_name, k.bezeichnung AS kat_name, k.sparte, "
+               "k.geschlecht AS kat_geschlecht, (SELECT MIN(k2.sortierung) FROM kategorie k2 "
+               "WHERE k2.wettkampf_id=t.wettkampf_id AND COALESCE(k2.sparte,'')=COALESCE(k.sparte,'')) AS sp_rang "
                "FROM teilnehmer t LEFT JOIN verein v ON v.id=t.verein_id "
                "LEFT JOIN kategorie k ON k.id=t.kategorie_id WHERE t.wettkampf_id=?")
         params = [g.wettkampf["id"]]
         if kat_filter:
             sql += " AND t.kategorie_id=?"
             params.append(kat_filter)
-        sql += " ORDER BY t.startnr"
-        liste = db.execute(sql, params).fetchall()
+        sql += " ORDER BY sp_rang, t.startnr"
+        # für die Sparten-Zwischenzeilen: geschlecht der Kategorie (nicht der Person)
+        liste = [dict(r, geschlecht_tn=r["geschlecht"], geschlecht=r["kat_geschlecht"])
+                 for r in db.execute(sql, params).fetchall()]
     return render_template("teilnehmer.html", liste=liste, kategorien=kategorien,
                            kat_filter=kat_filter, gesamt=gesamt, zu_gross=zu_gross,
                            status_labels=scoring.STATUS_LABELS)
@@ -1064,6 +1069,8 @@ def erfassung(kid):
         abort(404)
     if kat["berechnung"] == "jet":
         return redirect(url_for("jet_erfassung", kat=kid))
+    if kat["einheit"] == "Rang":
+        return redirect(url_for("seilziehen_eingabe", kid=kid))     # JTSST Seilziehen: Eingabe nach Blatt
     if "ist_stafette" in kat.keys() and kat["ist_stafette"]:
         # Stafetten werden im Stafetten-Modul bzw. per Schnellerfassung erfasst
         if _ist_chef():
@@ -1638,6 +1645,8 @@ def jtsst_import():
     try:
         ordner = _upload_oder_pfad("ordner", "*.xlsx", "*.xls", standard=os.path.join("Inputs", "JTSST"))
         b = import_ordner(g.db, ordner, quelle)
+        _jtsst_selektion(g.db, b["wettkampf_id"], neu=True)     # Pendelstafette + Seilziehen einteilen
+        g.db.commit()
         flash("JTSST-Anmeldungen importiert ({quelle}): {gruppen} Gruppen "
               "(Knaben {k}, Mädchen {m}).".format(
                   quelle="Gesamtübersicht" if b["quelle"] == "uebersicht" else "Alt-Export",
@@ -1702,9 +1711,13 @@ def einstellungen():
                                 (w["id"],)).fetchone()["c"] if w else 0
         anlaesse.append({"art": art, "w": w, "kategorien": kategorien, "teilnehmer": teilnehmer,
                          "stafetten": [k for k in kategorien if k["ist_stafette"]]})
-    vorjahr_n = db.execute("SELECT COUNT(*) c FROM vorjahr").fetchone()["c"]
+    vorjahr_n = db.execute("SELECT COUNT(*) c FROM vorjahr WHERE COALESCE(sparte,'') NOT IN ('Knaben','Mädchen')"
+                           ).fetchone()["c"]
+    vorjahr_jtsst_n = db.execute("SELECT COUNT(*) c FROM vorjahr WHERE sparte IN ('Knaben','Mädchen')"
+                                 ).fetchone()["c"]
     start = _art(db, g.wettkampf) or "allgemein"
     return render_template("einstellungen.html", liste=anlaesse, modi=KRANZ_MODI, vorjahr_n=vorjahr_n,
+                           vorjahr_jtsst_n=vorjahr_jtsst_n,
                            db_pfad=DB_PATH, start=start)
 
 
@@ -1740,7 +1753,8 @@ def einstellungen_anlass(art):
         # Auszeichnungs-Prozentsatz auf alle Kategorien dieses Anlasses anwenden (optional)
         proz = request.form.get("kranz_prozent", type=float)
         if proz is not None and request.form.get("kranz_auf_alle"):
-            db.execute("UPDATE kategorie SET kranz_modus='prozent', kranz_wert=? WHERE wettkampf_id=?", (proz, wid))
+            db.execute("UPDATE kategorie SET kranz_modus=CASE WHEN kranz_modus='finalrunde' THEN 'finalrunde' "
+                       "ELSE 'prozent' END, kranz_wert=? WHERE wettkampf_id=?", (proz, wid))
         for kat in kats:
             # Stafetten-Zuschläge
             za = request.form.get(f"za_{kat['id']}", type=float)
@@ -1748,12 +1762,10 @@ def einstellungen_anlass(art):
                 db.execute("UPDATE kategorie SET zuschlag_a=?, zuschlag_b=?, bahnen=? WHERE id=?",
                            (za, request.form.get(f"zb_{kat['id']}", type=float) or 0,
                             request.form.get(f"bahnen_{kat['id']}", type=int) or 8, kat["id"]))
-            # Zeitplan & Plausibilität
-            if request.form.get(f"anl_{kat['id']}") is not None:
-                db.execute("UPDATE kategorie SET anlagen=?, zeit_pro_turner=?, warn_min=?, warn_max=? WHERE id=?",
-                           (request.form.get(f"anl_{kat['id']}", type=int) or 1,
-                            request.form.get(f"zpt_{kat['id']}", type=float) or 0,
-                            request.form.get(f"wmin_{kat['id']}", type=float),
+            # Plausibilität (Anlagen/Zeit je Disziplin: Seite Einsatzplan)
+            if request.form.get(f"wmin_{kat['id']}") is not None:
+                db.execute("UPDATE kategorie SET warn_min=?, warn_max=? WHERE id=?",
+                           (request.form.get(f"wmin_{kat['id']}", type=float),
                             request.form.get(f"wmax_{kat['id']}", type=float), kat["id"]))
         db.commit()
         flash(f"Einstellungen {ANLAESSE[art]} gespeichert.", "ok")
@@ -1792,102 +1804,74 @@ def erfassungskontrolle():
 @app.route("/einsatzplan", methods=["GET"])
 @chef_required
 def einsatzplan():
+    from debra import einsatzplan as E
     db = g.db
-    kats = db.execute(
-        "SELECT k.*, COALESCE(k.sparte, w.name) AS wk_name, "
-        f"(SELECT COUNT(*) FROM teilnehmer t WHERE t.kategorie_id=k.id AND {OHNE_ABGEMELDETE}) AS anz "
-        "FROM kategorie k JOIN wettkampf w ON w.id=k.wettkampf_id "
-        "WHERE k.ist_stafette=0 AND k.wettkampf_id=? ORDER BY k.sortierung",
-        (g.wettkampf["id"] if g.wettkampf else 0,)).fetchall()
-    startzeit = get_setting("einsatz_start", "08:00")
-    return render_template("einsatzplan.html", kats=kats, startzeit=startzeit)
+    wk = g.wettkampf
+    if not wk:
+        return redirect(url_for("dashboard"))
+    cfg = E.einstellungen(db, wk)
+    vereine = E.vereine(db, wk)
+    zuteilung = E.abloesungen(db, wk) if cfg["abloesungen"] > 1 else {v["verein_id"]: 1 for v in vereine}
+    summen = {a: {"n": 0, "m": 0, "w": 0, "vereine": 0} for a in range(1, cfg["abloesungen"] + 1)}
+    for v in vereine:
+        v["abl"] = zuteilung.get(v["verein_id"], 1)
+        s = summen.setdefault(v["abl"], {"n": 0, "m": 0, "w": 0, "vereine": 0})
+        s["n"] += v["n"]; s["m"] += v["m"]; s["w"] += v["w"]; s["vereine"] += 1
+    return render_template("einsatzplan.html", cfg=cfg, diszs=E.disziplinen(db, wk), vereine=vereine,
+                           summen=summen, belegung=E.uebersicht(db, wk), max_abl=E.MAX_ABLOESUNGEN)
 
 
-@app.route("/einsatzplan/generieren", methods=["POST"])
+@app.route("/einsatzplan/einstellungen", methods=["POST"])
 @chef_required
-def einsatzplan_generieren():
-    import math
+def einsatzplan_einstellungen():
+    from debra import einsatzplan as E
     db = g.db
-    start = (request.form.get("startzeit") or "08:00").strip()
-    set_setting("einsatz_start", start)
-    try:
-        h, m = start.split(":"); base = int(h) * 60 + int(m)
-    except ValueError:
-        base = 8 * 60
-
-    def frei(intervalle, t, dur):
-        for s, e in intervalle:
-            if t < e and s < t + dur:
-                return False
-        return True
-
-    def frueheste(anlage_iv, verein_iv, dur):
-        # kleinste Startzeit >= base, in der Anlage UND Verein frei sind
-        kandidaten = {base}
-        for s, e in anlage_iv + verein_iv:
-            if e >= base:
-                kandidaten.add(e)
-        for t in sorted(kandidaten):
-            if frei(anlage_iv, t, dur) and frei(verein_iv, t, dur):
-                return t
-        return max(kandidaten)
-
-    # Aufgaben je Disziplin sammeln (Reihenfolge: Disziplin, Verein)
-    aufgaben = []
-    for k in db.execute("SELECT * FROM kategorie WHERE ist_stafette=0 AND wettkampf_id=? "
-                        "ORDER BY sortierung, bezeichnung", (g.wettkampf["id"] if g.wettkampf else 0,)).fetchall():
-        mitglieder = k["anzahl_werte"] or (5 if (k["geschlecht"] or "m") == "m" else 4)
-        dauer = max(1, math.ceil((k["zeit_pro_turner"] or 0) * mitglieder)) if k["zeit_pro_turner"] else 10
-        anlagen = k["anlagen"] or 1
-        labels = [(f"{k['bezeichnung']} {n + 1}" if anlagen > 1 else k["bezeichnung"])
-                  for n in range(anlagen)]
-        for t in db.execute(
-                "SELECT t.id, t.verein_id FROM teilnehmer t LEFT JOIN verein v ON v.id=t.verein_id "
-                f"WHERE t.kategorie_id=? AND {OHNE_ABGEMELDETE} ORDER BY v.name, t.gruppennr, t.startnr",
-                (k["id"],)).fetchall():
-            aufgaben.append((t["id"], t["verein_id"], dauer, labels))
-
-    anlage_busy, verein_busy, zaehler = {}, {}, {}
-    for tid, vid, dur, labels in aufgaben:
-        viv = verein_busy.setdefault(vid, [])
-        best = None
-        for lab in labels:
-            aiv = anlage_busy.setdefault(lab, [])
-            t0 = frueheste(aiv, viv, dur)
-            if best is None or t0 < best[0]:
-                best = (t0, lab, aiv)
-        t0, lab, aiv = best
-        aiv.append((t0, t0 + dur)); aiv.sort()
-        viv.append((t0, t0 + dur)); viv.sort()
-        zaehler[lab] = zaehler.get(lab, 0) + 1
-        hh, mm = divmod(t0, 60)
-        db.execute("UPDATE teilnehmer SET anlage=?, bahn=?, startzeit=? WHERE id=?",
-                   (lab, zaehler[lab], f"{hh:02d}:{mm:02d}", tid))
-    db.commit()
-    flash("Einsatzplan (Vormittag) erzeugt – kein Verein zeitgleich an zwei Anlagen. Manuell anpassbar.", "ok")
+    wk = g.wettkampf
+    if not wk:
+        return redirect(url_for("dashboard"))
+    alt = E.einstellungen(db, wk)["abloesungen"]
+    E.einstellungen_speichern(db, wk, request.form)
+    neu_anz = E.einstellungen(db, wk)["abloesungen"]
+    aktion = request.form.get("aktion", "speichern")
+    if neu_anz != alt or aktion == "ausgleichen":
+        E.abloesungen(db, wk, neu=True)
+    elif any(k.startswith("abl_") for k in request.form):
+        zuteilung = {}
+        for k, v in request.form.items():
+            if k.startswith("abl_"):
+                try:
+                    zuteilung[int(k[4:])] = min(max(int(v), 1), neu_anz)
+                except ValueError:
+                    pass
+        E.abloesungen_speichern(db, wk, zuteilung)
+    if aktion == "generieren":
+        b = E.generieren(db, wk)
+        teile = [f"Ablösung {a['nr']}: {a['start']}–{a['ende']} ({a['personen']} "
+                 f"{'Turner:innen' if E.ist_jet(db, wk) else 'Gruppen'}, {a['vereine']} Vereine)"
+                 for a in b["abloesungen"]]
+        flash("Einsatzplan erzeugt – " + "; ".join(teile) + ". Manuell anpassbar.", "ok")
+        for w in b["warnungen"]:
+            flash(w, "error")
+    elif aktion == "ausgleichen":
+        flash("Vereine neu auf die Ablösungen verteilt (Knaben und Mädchen eines Vereins zusammen).", "ok")
+    else:
+        flash("Einsatzplan-Einstellungen gespeichert.", "ok")
     return redirect(url_for("einsatzplan"))
 
 
 @app.route("/einsatzplan/druck")
 @chef_required
 def einsatzplan_druck():
-    db = g.db
-    nach = request.args.get("nach", "anlage")   # anlage | verein
-    rows = db.execute(
-        "SELECT t.startnr, t.gruppennr, t.anlage, t.startzeit, v.name AS verein_name, "
-        "t.verein_zusatz, k.bezeichnung AS kat_name FROM teilnehmer t "
-        "LEFT JOIN verein v ON v.id=t.verein_id JOIN kategorie k ON k.id=t.kategorie_id "
-        f"WHERE k.ist_stafette=0 AND t.startzeit IS NOT NULL AND t.wettkampf_id=? AND {OHNE_ABGEMELDETE}",
-        (g.wettkampf["id"] if g.wettkampf else 0,)).fetchall()
     from itertools import groupby
+    from debra import einsatzplan as E
+    nach = request.args.get("nach", "anlage")   # anlage | verein
+    rows = E.eintraege(g.db, g.wettkampf) if g.wettkampf else []
     if nach == "verein":
-        rows = sorted(rows, key=lambda r: ((r["verein_name"] or ""), r["startzeit"] or ""))
-        gruppen = [{"kopf": key, "zeilen": list(grp)}
-                   for key, grp in groupby(rows, key=lambda r: r["verein_name"] or "")]
+        schluessel = lambda r: f"{r['verein']} {r['zusatz']}".strip()
     else:
-        rows = sorted(rows, key=lambda r: ((r["anlage"] or ""), r["startzeit"] or ""))
-        gruppen = [{"kopf": key, "zeilen": list(grp)}
-                   for key, grp in groupby(rows, key=lambda r: r["anlage"] or "")]
+        schluessel = lambda r: r["anlage"] or ""
+    rows = sorted(rows, key=lambda r: (schluessel(r).lower(), r["start"] or 0))
+    gruppen = [{"kopf": key, "zeilen": list(grp)} for key, grp in groupby(rows, key=schluessel)]
     return render_template("einsatzplan_druck.html", gruppen=gruppen, nach=nach)
 
 
@@ -2125,10 +2109,31 @@ def _serien_lanes(db, kat, runde):
 def stafetten_index():
     if not _require_wettkampf():
         return redirect(url_for("wettkaempfe"))
+    jtsst = _art(g.db, g.wettkampf) == "jtsst"
+    _jtsst_auto()
     kategorien = g.db.execute(
         "SELECT k.*, COALESCE(k.sparte, w.name) AS wk_name FROM kategorie k JOIN wettkampf w ON w.id=k.wettkampf_id "
-        "WHERE k.ist_stafette=1 AND k.wettkampf_id=? ORDER BY k.sortierung", (g.wettkampf["id"],)).fetchall()
-    return render_template("stafetten_index.html", kategorien=kategorien)
+        "WHERE (k.ist_stafette=1 OR (? AND k.einheit='Rang')) AND k.wettkampf_id=? ORDER BY k.sortierung",
+        (jtsst, g.wettkampf["id"])).fetchall()
+    return render_template("stafetten_index.html", kategorien=kategorien, jtsst=jtsst)
+
+
+def _jtsst_auto():
+    """Beim Öffnen der Selektions-Seiten: fehlende JTSST-Einteilungen automatisch ergänzen."""
+    if g.wettkampf and _art(g.db, g.wettkampf) == "jtsst" and _jtsst_selektion(g.db, g.wettkampf["id"]):
+        g.db.commit()
+
+
+@app.route("/jtsst/selektion", methods=["POST"])
+@chef_required
+def jtsst_selektion_neu():
+    """Pendelstafette und Seilziehen des JTSST neu einteilen (ohne Kategorien mit Resultaten)."""
+    wid = _jtsst_wid(g.db)
+    n = _jtsst_selektion(g.db, wid, neu=True) if wid else 0
+    g.db.commit()
+    flash(f"Pendelstafette und Seilziehen neu eingeteilt ({n} Kategorien; Kategorien mit Resultaten unverändert).",
+          "ok")
+    return redirect(request.referrer or url_for("stafetten_index"))
 
 
 def _stafette_teams(db, kid):
@@ -2228,6 +2233,8 @@ def stafette_bahnen(kid):
         abort(404)
     runde = request.args.get("runde", "vorlauf" if kat["hat_final"] else "final")
     bahnen = kat["bahnen"] or 8
+    if request.method == "GET":
+        _jtsst_auto()
 
     if request.method == "POST":
         for key, val in request.form.items():
@@ -2243,6 +2250,8 @@ def stafette_bahnen(kid):
         flash("Bahneneinteilung gespeichert.", "ok")
         return redirect(url_for("stafette_bahnen", kid=kid, runde=runde))
 
+    from debra import vorjahr as vj
+    setz = vj.setzwerte(db, kat)
     teams = _stafette_teams(db, kid)
     rows = []
     for t in teams:
@@ -2254,7 +2263,8 @@ def stafette_bahnen(kid):
         vz = scoring.stafette_endzeit(vr, kat)
         rows.append({"t": t, "serie": r["serie"] if r else None,
                      "bahn": r["bahn"] if r else None, "vz": vz,
-                     "final_gruppe": t["final_gruppe"]})
+                     "final_gruppe": t["final_gruppe"],
+                     "vj": setz.get(t["verein_name"]) if (t["gruppennr"] or 1) == 1 else None})
     return render_template("stafette_bahnen.html", kat=kat, rows=rows, runde=runde, bahnen=bahnen)
 
 
@@ -2266,6 +2276,15 @@ def stafette_bahnen_auto(kid):
     if not kat or not kat["ist_stafette"]:
         abort(404)
     runde = request.form.get("runde", "vorlauf" if kat["hat_final"] else "final")
+    _bahnen_zuteilen(db, kat, runde)
+    db.commit()
+    flash("Bahnen automatisch zugeteilt (manuell anpassbar).", "ok")
+    return redirect(url_for("stafette_bahnen", kid=kid, runde=runde))
+
+
+def _bahnen_zuteilen(db, kat, runde):
+    """Automatische Serien-/Bahneneinteilung einer Stafette (ohne commit)."""
+    kid = kat["id"]
     bahnen = kat["bahnen"] or 8
     teams = _stafette_teams(db, kid)
 
@@ -2288,16 +2307,15 @@ def stafette_bahnen_auto(kid):
             for i, (_, tid) in enumerate(zeiten):
                 set_bahn(tid, serie, LANE_ORDER[i] if i < len(LANE_ORDER) else i + 1)
     else:
-        # Grundlage Vorjahr NUR für Gruppe 1 je Verein; übrige Gruppen auf andere Serien.
-        sparte = "Turner" if (kat["geschlecht"] or "m") == "m" else "Turnerinnen"
+        # Grundlage Vorjahr NUR für Gruppe 1 je Verein (nie das Resultat einer 2. Gruppe);
+        # übrige Gruppen auf andere Serien.
+        from debra import vorjahr as vj
+        setz = vj.setzwerte(db, kat)
         aktive = [t for t in teams if not (t["status"] or "")]
 
         def vjz(t):
-            vj = db.execute(
-                "SELECT zeit FROM vorjahr WHERE disziplin=? AND verein=? "
-                "AND (sparte=? OR sparte IS NULL) ORDER BY zeit LIMIT 1",
-                (kat["bezeichnung"], t["verein_name"], sparte)).fetchone()
-            return vj["zeit"] if vj and vj["zeit"] is not None else 9e9
+            rang, zeit = setz.get(t["verein_name"], (None, None))
+            return (zeit if zeit is not None else 9e9, rang or 9e9)
 
         g1 = sorted([t for t in aktive if (t["gruppennr"] or 1) == 1], key=vjz)
         rest = sorted([t for t in aktive if (t["gruppennr"] or 1) != 1],
@@ -2334,9 +2352,40 @@ def stafette_bahnen_auto(kid):
         for s, ids in serien.items():
             for i, tid in enumerate(ids):
                 set_bahn(tid, s, LANE_ORDER[i] if i < len(LANE_ORDER) else i + 1)
-    db.commit()
-    flash("Bahnen automatisch zugeteilt (manuell anpassbar).", "ok")
-    return redirect(url_for("stafette_bahnen", kid=kid, runde=runde))
+
+
+def _jtsst_selektion(db, wid, neu=False):
+    """JTSST: Serien der Pendelstafette und Seilziehen-Tableau automatisch einteilen.
+
+    neu=False: nur Kategorien ohne Einteilung; neu=True: alle neu einteilen. Kategorien mit
+    bereits erfassten Resultaten bleiben immer unverändert. Liefert die Anzahl Kategorien.
+    """
+    n = 0
+    for kat in db.execute("SELECT * FROM kategorie WHERE wettkampf_id=? AND ist_stafette=1 "
+                          "AND bezeichnung LIKE 'Pendelstafette%'", (wid,)).fetchall():
+        st = db.execute("SELECT COUNT(s.serie) eingeteilt, COUNT(s.rohzeit) zeiten FROM stafette s "
+                        "JOIN teilnehmer t ON t.id=s.teilnehmer_id WHERE t.kategorie_id=? AND s.runde='final'",
+                        (kat["id"],)).fetchone()
+        if st["zeiten"] or (st["eingeteilt"] and not neu) or not _stafette_teams(db, kat["id"]):
+            continue
+        _bahnen_zuteilen(db, kat, "final")
+        n += 1
+    for kat in db.execute("SELECT * FROM kategorie WHERE wettkampf_id=? AND einheit='Rang'", (wid,)).fetchall():
+        st = db.execute("SELECT COUNT(serie) eingeteilt, COUNT(DISTINCT serie) zuege, COUNT(sz_runde) erfasst, "
+                        f"COUNT(*) anz FROM teilnehmer t WHERE kategorie_id=? AND {OHNE_ABGEMELDETE}",
+                        (kat["id"],)).fetchone()
+        # gültig = alle eingeteilt, Züge passend zu höchstens einem Freilos (ältere Einteilungen neu)
+        gueltig = st["eingeteilt"] == st["anz"] and st["zuege"] == (st["anz"] + 1) // 2
+        if st["erfasst"] or (gueltig and not neu) or not st["anz"]:
+            continue
+        _sz_auslosen(db, kat)
+        n += 1
+    return n
+
+
+def _jtsst_wid(db):
+    w = _anlaesse(db).get("jtsst")
+    return w["id"] if w else None
 
 
 @app.route("/stafetten/<int:kid>/bahnen/druck")
@@ -2350,6 +2399,200 @@ def stafette_bahnen_druck(kid):
     runde = request.args.get("runde", "vorlauf" if kat["hat_final"] else "final")
     serien = _serien_lanes(db, kat, runde)
     return render_template("notenblatt_lauf_druck.html", kat=kat, runde=runde, serien=serien)
+
+
+# --------------------------------------------------------------------------- #
+# JTSST Seilziehen: Eingabe nach Cup-Blatt, K.-o.-Tableau mit Freilosen, Turnierbaum
+# --------------------------------------------------------------------------- #
+def _sz_kategorie(kid):
+    kat = g.db.execute("SELECT k.*, COALESCE(k.sparte, w.name) AS wk_name FROM kategorie k "
+                       "JOIN wettkampf w ON w.id=k.wettkampf_id WHERE k.id=?", (kid,)).fetchone()
+    if not kat or kat["einheit"] != "Rang":
+        abort(404)
+    return kat
+
+
+def _sz_teams(db, kid):
+    return db.execute(
+        "SELECT t.*, v.name AS verein_name FROM teilnehmer t LEFT JOIN verein v ON v.id=t.verein_id "
+        f"WHERE t.kategorie_id=? AND {OHNE_ABGEMELDETE} ORDER BY v.name, t.gruppennr, t.startnr",
+        (kid,)).fetchall()
+
+
+@app.route("/seilziehen")
+@login_required
+def seilziehen_index():
+    if not _require_wettkampf():
+        return redirect(url_for("wettkaempfe"))
+    _jtsst_auto()
+    kategorien = g.db.execute(
+        "SELECT k.*, COALESCE(k.sparte, w.name) AS wk_name, "
+        f"(SELECT COUNT(*) FROM teilnehmer t WHERE t.kategorie_id=k.id AND {OHNE_ABGEMELDETE}) AS anz, "
+        "(SELECT COUNT(*) FROM teilnehmer t WHERE t.kategorie_id=k.id AND t.sz_runde IS NOT NULL) AS erfasst "
+        "FROM kategorie k JOIN wettkampf w ON w.id=k.wettkampf_id "
+        "WHERE k.einheit='Rang' AND k.wettkampf_id=? ORDER BY k.sortierung", (g.wettkampf["id"],)).fetchall()
+    return render_template("seilziehen_index.html", kategorien=kategorien)
+
+
+@app.route("/seilziehen/<int:kid>", methods=["GET", "POST"])
+@login_required
+def seilziehen_eingabe(kid):
+    """Eingabe nach dem Seilziehen-Blatt: Plätze 1–4 und Ausgeschiedene je Runde. Die Runden
+    ergeben sich aus der Teilnehmerzahl; wer nicht aufgeführt ist, schied in der ersten Runde aus."""
+    from debra import seilziehen as sz
+    db = g.db
+    kat = _sz_kategorie(kid)
+    teams = _sz_teams(db, kid)
+    wertbar = [t for t in teams if not (t["status"] or "")]
+    aufbau = sz.tableau(len(wertbar))
+    erste = sz.erste_runde(len(wertbar))
+
+    def anzeigen(runden, raenge):
+        return render_template("seilziehen_eingabe.html", kat=kat, teams=teams, runden=runden,
+                               RUNDEN=sz.RUNDEN, raenge=raenge, aufbau=aufbau, erste=erste,
+                               ausz=_sz_auszeichnungen(db, kid) if raenge else None)
+
+    if request.method == "POST":
+        if request.form.get("aktion") == "leeren":
+            for t in teams:
+                db.execute("UPDATE teilnehmer SET sz_runde=NULL WHERE id=?", (t["id"],))
+                db.execute("DELETE FROM resultat WHERE teilnehmer_id=? AND position=1", (t["id"],))
+                _log(db, "resultat", t["id"], kid, "Seilziehen", t["sz_runde"], "")
+            db.commit()
+            flash("Seilziehen-Eingabe gelöscht.", "ok")
+            return redirect(url_for("seilziehen_eingabe", kid=kid))
+        runden = {t["id"]: request.form.get(f"runde_{t['id']}") or erste for t in wertbar}
+        runden = {tid: (r if r in sz.RUNDEN else erste) for tid, r in runden.items()}
+        fehler = sz.pruefen(runden)
+        if fehler:
+            for f in fehler:
+                flash(f, "error")
+            return anzeigen(runden, {})
+        raenge = sz.raenge(runden)
+        kennung, jetzt = session.get("kennung", ""), _jetzt()
+        for t in wertbar:
+            tid, rang = t["id"], raenge[t["id"]]
+            alt = db.execute("SELECT note FROM resultat WHERE teilnehmer_id=? AND position=1", (tid,)).fetchone()
+            db.execute("UPDATE teilnehmer SET sz_runde=? WHERE id=?", (runden[tid], tid))
+            db.execute(
+                "INSERT INTO resultat(teilnehmer_id, position, note, wert, status, erfasst_von, erfasst_am) "
+                "VALUES(?,1,?,?,NULL,?,?) ON CONFLICT(teilnehmer_id, position) DO UPDATE SET "
+                "note=excluded.note, wert=excluded.wert, status=NULL, erfasst_von=excluded.erfasst_von, "
+                "erfasst_am=excluded.erfasst_am", (tid, rang, rang, kennung, jetzt))
+            _log(db, "resultat", tid, kid, "Seilziehen",
+                 f"{alt['note']:.2f}" if alt and alt["note"] is not None else "", f"{float(rang):.2f}")
+        # Auszeichnung nach ganzen Runden statt genau nach Platzierung (Anteil bleibt erhalten)
+        wert = kat["kranz_wert"] if kat["kranz_modus"] in ("prozent", "finalrunde") and kat["kranz_wert"] else 30
+        db.execute("UPDATE kategorie SET kranz_modus='finalrunde', kranz_wert=? WHERE id=?", (wert, kid))
+        db.commit()
+        flash(f"Seilziehen gespeichert: {len(wertbar)} Gruppen rangiert, "
+              f"{_sz_auszeichnungen(db, kid)} Auszeichnungen (ganze Runden, höchstens {wert:g} %).", "ok")
+        for h in sz.hinweise(runden):
+            flash(h, "error")
+        return redirect(url_for("seilziehen_eingabe", kid=kid))
+
+    runden = {t["id"]: t["sz_runde"] for t in teams if t["sz_runde"]}
+    return anzeigen(runden, sz.raenge(runden) if runden else {})
+
+
+def _sz_auszeichnungen(db, kid):
+    kat = db.execute("SELECT * FROM kategorie WHERE id=?", (kid,)).fetchone()
+    return sum(1 for e in scoring.rangliste(db, kat)["eintraege"] if e.get("auszeichnung"))
+
+
+def _sz_auslosen(db, kat):
+    """Seilziehen: erste Runde des Tableaus auslosen und speichern (ohne commit)."""
+    from debra import seilziehen as sz
+    from debra import vorjahr as vj
+    teams = [t for t in _sz_teams(db, kat["id"]) if not (t["status"] or "")]
+    setz = {v: rang for v, (rang, _) in vj.setzwerte(db, kat).items()}
+    zuteilung = sz.auslosen([{"id": t["id"], "verein": t["verein_name"], "gruppennr": t["gruppennr"],
+                              "startnr": t["startnr"]} for t in teams], setz)
+    for t in teams:
+        nr, seite = zuteilung.get(t["id"], (None, None))
+        db.execute("UPDATE teilnehmer SET serie=?, bahn=? WHERE id=?", (nr, seite, t["id"]))
+
+
+def _sz_baum(db, kat):
+    from debra import seilziehen as sz
+    teams = [t for t in _sz_teams(db, kat["id"]) if not (t["status"] or "")]
+    zuege = {}
+    for t in sorted(teams, key=lambda t: t["bahn"] or 9):
+        if t["serie"]:
+            name = f"{t['verein_name'] or ''} {t['gruppennr'] or ''}".strip()
+            zuege.setdefault(t["serie"], []).append({"startnr": t["startnr"], "name": name})
+    return {"baum": sz.turnierbaum(zuege, len(teams)), "aufbau": sz.tableau(len(teams)), "kat": kat,
+            "anzahl": len(teams), "ohne": sum(1 for t in teams if not t["serie"])}
+
+
+@app.route("/seilziehen/turnierbaum")
+@app.route("/seilziehen/<int:kid>/turnierbaum")
+@login_required
+def seilziehen_turnierbaum(kid=None):
+    """Turnierbaum zum Ausdrucken (inkl. Start-Nr.): eine Kategorie oder alle des Anlasses."""
+    if not _require_wettkampf():
+        return redirect(url_for("wettkaempfe"))
+    _jtsst_auto()
+    db = g.db
+    if kid:
+        kats = [_sz_kategorie(kid)]
+    else:
+        kats = db.execute("SELECT k.*, COALESCE(k.sparte, w.name) AS wk_name FROM kategorie k "
+                          "JOIN wettkampf w ON w.id=k.wettkampf_id WHERE k.einheit='Rang' AND k.wettkampf_id=? "
+                          "ORDER BY k.sortierung", (g.wettkampf["id"],)).fetchall()
+    baeume = [b for b in (_sz_baum(db, k) for k in kats) if b["anzahl"]]
+    return render_template("seilziehen_turnierbaum.html", baeume=baeume, wettkampf=g.wettkampf)
+
+
+@app.route("/seilziehen/<int:kid>/gruppen", methods=["GET", "POST"])
+@chef_required
+def seilziehen_gruppen(kid):
+    """Einteilung der ersten Runde (K.-o.-Tableau): teilnehmer.serie = Zug-Nr., bahn = Seite.
+    Freilose gemäss Teilnehmerzahl, Gruppe 1 je Verein nach Vorjahr gesetzt."""
+    from debra import seilziehen as sz
+    from debra import vorjahr as vj
+    db = g.db
+    kat = _sz_kategorie(kid)
+    if request.method == "GET":
+        _jtsst_auto()
+    teams = [t for t in _sz_teams(db, kid) if not (t["status"] or "")]
+    setz = {v: rang for v, (rang, _) in vj.setzwerte(db, kat).items()}
+    aufbau = sz.tableau(len(teams))
+
+    if request.method == "POST":
+        if request.form.get("aktion") == "auto":
+            _sz_auslosen(db, kat)
+            db.commit()
+            flash(f"{len(teams)} Gruppen eingeteilt: {aufbau['zuege']} Züge im {aufbau['erste']}"
+                  + (", 1 Freilos" if aufbau["freilos"] else "")
+                  + " (Gruppe 1 nach Vorjahr gesetzt, manuell anpassbar).", "ok")
+            return redirect(url_for("seilziehen_gruppen", kid=kid))
+        else:
+            zuteilung, seiten = {}, {}
+            for t in sorted(teams, key=lambda t: t["bahn"] or 9):
+                nr = request.form.get(f"zug_{t['id']}", type=int)
+                if nr:
+                    seiten[nr] = seiten.get(nr, 0) + 1
+                    zuteilung[t["id"]] = (nr, seiten[nr])
+            flash("Einteilung gespeichert.", "ok")
+        for t in teams:
+            nr, seite = zuteilung.get(t["id"], (None, None))
+            db.execute("UPDATE teilnehmer SET serie=?, bahn=? WHERE id=?", (nr, seite, t["id"]))
+        db.commit()
+        return redirect(url_for("seilziehen_gruppen", kid=kid))
+
+    zuege = {}
+    for t in teams:
+        zuege.setdefault(t["serie"], []).append(t)
+    for liste in zuege.values():
+        liste.sort(key=lambda t: t["bahn"] or 9)
+    # Hinweise: gleicher Verein im selben Zug, Zug mit mehr als 2 Gruppen
+    doppelt = {nr for nr, liste in zuege.items() if nr and len({t["verein_name"] for t in liste}) < len(liste)}
+    zuviel = {nr for nr, liste in zuege.items() if nr and len(liste) > 2}
+    return render_template("seilziehen_gruppen.html", kat=kat, teams=teams, setz=setz, aufbau=aufbau,
+                           zuege=dict(sorted(zuege.items(), key=lambda kv: (kv[0] is None, kv[0] or 0))),
+                           doppelt=doppelt, zuviel=zuviel,
+                           druck=request.args.get("druck") == "1")
 
 
 @app.route("/import/excel", methods=["GET", "POST"])
@@ -2543,11 +2786,14 @@ def statistik_druck():
 @app.route("/vorjahr")
 @chef_required
 def vorjahr_ansicht():
+    from debra import vorjahr as vj
     db = g.db
+    jtsst = bool(g.wettkampf) and _art(db, g.wettkampf) == "jtsst"
     bloecke = {}
-    for r in db.execute("SELECT * FROM vorjahr ORDER BY sparte, disziplin, rang").fetchall():
+    for r in db.execute("SELECT * FROM vorjahr WHERE COALESCE(sparte,'') " + ("" if jtsst else "NOT ")
+                        + "IN (?,?) ORDER BY sparte, disziplin, rang", vj.JTSST_SPARTEN).fetchall():
         bloecke.setdefault((r["sparte"], r["disziplin"]), []).append(r)
-    return render_template("vorjahr.html", bloecke=bloecke, fmt_zeit=scoring.fmt_zeit)
+    return render_template("vorjahr.html", bloecke=bloecke, fmt_zeit=scoring.fmt_zeit, jtsst=jtsst)
 
 
 @app.route("/vorjahr/import", methods=["POST"])
@@ -2560,11 +2806,23 @@ def vorjahr_import():
         if pfad and os.path.isdir(pfad) and not glob.glob(os.path.join(pfad, "WT_*.txt")):
             pdfs = glob.glob(os.path.join(pfad, "*.pdf"))   # hochgeladene Rangliste als PDF
             pfad = pdfs[0] if pdfs else pfad
+        if request.form.get("anlass") == "jtsst":
+            if not pfad or not os.path.isfile(pfad):
+                raise ValueError("Bitte die JTSST-Rangliste als PDF hochladen.")
+            n = vj.importieren_jtsst(g.db, pfad)
+            k = _jtsst_selektion(g.db, _jtsst_wid(g.db), neu=True) if n and _jtsst_wid(g.db) else 0
+            g.db.commit()
+            flash(f"JTSST-Vorjahresrangliste importiert: {n} Resultate "
+                  "(Pendelstafette, Hindernislauf, Schwedenstafette, Seilziehen)"
+                  + (f"; Pendelstafette und Seilziehen in {k} Kategorien neu eingeteilt." if k else "."),
+                  "ok" if n else "error")
+            return redirect(url_for("einstellungen") + "#jtsst/import")
         n = vj.importieren(conn=g.db, pdf_pfad=pfad)
         flash(f"Vorjahres-Rangliste importiert: {n} Stafetten-Resultate.", "ok")
     except Exception as exc:  # pragma: no cover
         flash(f"Import fehlgeschlagen: {exc}", "error")
-    return redirect(url_for("einstellungen") + "#tsst/import")
+    return redirect(url_for("einstellungen") + ("#jtsst/import" if request.form.get("anlass") == "jtsst"
+                                                 else "#tsst/import"))
 
 
 # --------------------------------------------------------------------------- #

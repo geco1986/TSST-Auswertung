@@ -17,6 +17,10 @@
   {{ druckknoepfe('serienplan', {'kid': kat.id, 'runde': runde}) }}
 </div>
 
+{% if not kat.hat_final %}
+  <p class="muted">Automatisch: Gruppe 1 je Verein nach Vorjahr gesetzt – die Vorjahresbesten laufen in der letzten Serie.
+    Für die Setzung zählt nur das Vorjahresresultat der Gruppe 1, nie das einer 2. Gruppe; weitere Gruppen eines Vereins kommen in andere Serien.</p>
+{% endif %}
 {% if runde=='final' and kat.hat_final %}
   <p class="muted">Final-Bahnen werden nach Vorlaufzeit gesetzt (schnellste in die Mitte). {{ 'A-Final = Serie 1, B-Final = Serie 2.' if kat.final_typ=='ab' else 'Final = Serie 1.' }}</p>
 {% endif %}
@@ -24,13 +28,14 @@
 <form method="post">
   <div class="table-wrap">
     <table class="sortable">
-      <thead><tr><th class="num">Start</th><th>Gruppe</th><th class="num">Vorlaufzeit</th>{% if kat.hat_final %}<th class="no-sort">Final</th>{% endif %}<th class="no-sort num">Serie</th><th class="no-sort num">Bahn</th></tr></thead>
+      <thead><tr><th class="num">Start</th><th>Gruppe</th><th class="num" title="Vorjahr, nur Gruppe 1 je Verein">Vorjahr</th><th class="num">Vorlaufzeit</th>{% if kat.hat_final %}<th class="no-sort">Final</th>{% endif %}<th class="no-sort num">Serie</th><th class="no-sort num">Bahn</th></tr></thead>
       <tbody>
       {% for r in rows %}
         {% set t = r.t %}
         <tr>
           <td class="num mono">{{ t.startnr }}</td>
           <td><strong>{{ t.verein_name or '—' }}</strong>{% if t.verein_zusatz %} {{ t.verein_zusatz }}{% endif %}{% if t.gruppennr %} ({{ t.gruppennr }}){% endif %}</td>
+          <td class="num">{% if r.vj %}{{ r.vj[0] }}.{% if r.vj[1] is not none %} <span class="muted">{{ fmt_zeit(r.vj[1]) }}</span>{% endif %}{% endif %}</td>
           <td class="num total">{{ fmt_zeit(r.vz) }}</td>
           {% if kat.hat_final %}<td>{{ r.final_gruppe or '' }}</td>{% endif %}
           <td class="num"><input type="number" min="1" name="serie_{{ t.id }}" style="width:56px" value="{{ r.serie or '' }}"></td>

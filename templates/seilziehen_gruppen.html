@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Einteilung {{ kat.bezeichnung }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Einteilung – {{ kat.bezeichnung }}</h1>
+    <p class="sub">{{ teams|length }} Gruppen · erste Runde {{ aufbau.erste }}: {{ aufbau.zuege }} Züge{% if aufbau.freilos %}, 1 Freilos{% endif %}
+      {%- if aufbau.lucky_loser %} · Lucky Loser in {{ aufbau.lucky_loser }} Runde(n){% endif %}.
+      Gruppe 1 je Verein nach Vorjahr gesetzt (die beste erhält das Freilos, Gesetzte treffen erst spät aufeinander);
+      2. Gruppen nie gesetzt, Gruppen desselben Vereins treffen so spät wie möglich aufeinander.</p></div>
+  <div class="spacer"></div>
+  <form method="post" style="display:inline">
+    <input type="hidden" name="aktion" value="auto">
+    <button class="btn" type="submit" {% if zuege and none not in zuege %}onclick="return confirm('Bestehende Einteilung neu auslosen?')"{% endif %}>Automatisch einteilen</button>
+  </form>
+  <a class="btn" href="{{ url_for('seilziehen_gruppen', kid=kat.id, druck=1) }}" target="_blank">Liste drucken</a>
+  <a class="btn primary" href="{{ url_for('seilziehen_turnierbaum', kid=kat.id) }}" target="_blank">Turnierbaum drucken</a>
+  <a class="btn" href="{{ url_for('seilziehen_eingabe', kid=kat.id) }}">Eingabe →</a>
+</div>
+
+{% if not setz %}
+  <p class="muted">Keine Vorjahresdaten für {{ kat.bezeichnung }} – Import unter Einstellungen → JTSST → Import.</p>
+{% endif %}
+{% if doppelt %}<div class="flash error">Gleicher Verein im selben Zug: {{ doppelt|sort|join(', ') }}.</div>{% endif %}
+{% if zuviel %}<div class="flash error">Mehr als 2 Gruppen im Zug {{ zuviel|sort|join(', ') }}.</div>{% endif %}
+
+{% macro team(t) -%}
+  {{ t.verein_name }} {{ t.gruppennr or '' }} <span class="muted mono">({{ t.startnr }})</span>
+  {%- if (t.gruppennr or 1) == 1 and setz.get(t.verein_name) %} <span class="muted">VJ {{ setz[t.verein_name] }}.</span>{% endif %}
+{%- endmacro %}
+
+{% if druck %}
+<style>.sidebar,.page-head form,.page-head .btn,.anlass-band{display:none!important}
+  .zuege td{padding:3px 6px;border-bottom:1px solid #ddd}</style>
+<table class="zuege"><thead><tr><th>Zug</th><th>Gruppe</th><th></th><th>Gruppe</th></tr></thead><tbody>
+  {% for nr, liste in zuege.items() if nr %}
+  <tr><td class="num">{{ nr }}</td><td>{{ team(liste[0]) }}</td><td>–</td>
+    <td>{% if liste|length > 1 %}{{ team(liste[1]) }}{% else %}<em>Freilos</em>{% endif %}</td></tr>
+  {% endfor %}
+</tbody></table>
+<script>window.addEventListener('load', () => window.print());</script>
+{% else %}
+<form method="post">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th class="num">Zug</th><th>Gruppe</th><th>Gegner</th><th class="no-sort num">Zug-Nr. ändern</th></tr></thead>
+      <tbody>
+      {% for nr, liste in zuege.items() %}{% for t in liste %}
+        <tr{% if nr in doppelt or nr in zuviel %} style="background:#fdecec"{% endif %}>
+          <td class="num">{{ nr or '–' }}</td>
+          <td><strong>{{ team(t) }}</strong></td>
+          <td>{% if not nr %}<span class="muted">nicht eingeteilt</span>
+            {% elif liste|length == 1 %}<em>Freilos</em>
+            {% else %}{% for o in liste if o.id != t.id %}{{ team(o) }}{% endfor %}{% endif %}</td>
+          <td class="num"><input type="number" min="1" name="zug_{{ t.id }}" value="{{ t.serie or '' }}" style="width:64px"></td>
+        </tr>
+      {% endfor %}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="savebar"><button class="btn primary" type="submit">Einteilung speichern</button></div>
+</form>
+{% endif %}
+{% endblock %}

@@ -8,6 +8,58 @@ Alle wesentlichen Änderungen an DEBRA-Web.
   (ohne Passwort), Zugriff über WLAN/Internet nur mit Passwort (Caddy), DuckDNS-Updater und
   optional Tailscale Funnel.
 
+## [0.7.5] – 2026-11-02
+- Einsatzplan (Menü „Einsatzplan“, für TSST, JTSST und JET): Anlagen und Minuten je Turner:in werden je
+  Disziplin gepflegt und gelten für alle Kategorien, Knaben und Mädchen gemeinsam (0 Anlagen = Disziplin
+  nicht im Plan). Bisherige Werte je Kategorie werden als Vorgabe übernommen; unter Einstellungen bleibt
+  nur noch die Plausibilität (Warn min/max).
+- „Zeit je Gruppe“ für Gruppenvorführungen (JET Gymnastik vorbelegt): die Minuten gelten je Gruppe/Riege
+  statt je Turner:in.
+- „Verteilen“ je Disziplin (nur nicht schätzbare mit mehreren Anlagen; beim JET vorbelegt): eine Riege wird
+  gleichzeitig auf alle Anlagen aufgeteilt, z. B. Klettern – der Verein turnt miteinander.
+- Schätzbare Disziplinen (Häkchen, beim JET für die Geräte vorbelegt): jede Kategorie bleibt den ganzen Tag
+  auf derselben Anlage (gleiche Wertungsrichter:innen); die Kategorien werden nach Belastung auf die
+  Anlagen verteilt.
+- Ablösungen (1–4, JET: 2) mit Startzeit je Ablösung (leer = direkt anschliessend). Die Vereine werden so
+  verteilt, dass die Ablösungen gleich gross sind; Knaben und Mädchen eines Vereins sind immer in derselben
+  Ablösung. Einteilung je Verein manuell änderbar, „Ablösungen automatisch ausgleichen“ verteilt neu.
+- JET: Riegen je Verein (Knaben bzw. Mädchen, „Max. Riegengrösse“ einstellbar, Vorgabe 16, nach Kategorie
+  sortiert) besuchen miteinander alle Disziplinen ihres Programms; bei schätzbaren Disziplinen turnen die
+  Kategorien einer Riege gleichzeitig, jede auf ihrer festen Anlage.
+- Einsatzplan-Listen (PDF/Excel, nach Anlage oder Verein) mit Ablösung, Zeit von–bis, Kategorie, Anzahl und
+  Start-Nr.; Übersicht der Belegung je Anlage auf der Seite.
+
+## [0.7.4] – 2026-11-01
+- JTSST Seilziehen im K.-o.-System (Menü „Seilziehen“) mit so vielen Runden wie möglich (1/32-, 1/64-Final …):
+  höchstens ein Freilos (1. Runde bei ungerader Anzahl), bei ungerader Anzahl Sieger kommt ein Lucky Loser
+  weiter, bis 4 Gruppen in den Halbfinals stehen – z. B. 51 Gruppen: 25 Züge + Freilos → 13 Züge + Lucky Loser
+  → 7 Züge + Lucky Loser → 1/4-Final (passt zur Rangliste 2026).
+- Einteilung: Gruppe 1 je Verein nach Vorjahr gesetzt – die beste erhält das Freilos, die Gesetzten treffen
+  erst spät aufeinander; 2. Gruppen nie gesetzt. Gruppen desselben Vereins treffen so spät wie möglich
+  aufeinander (2 Gruppen frühestens im Final, 3–4 frühestens im Halbfinal …). Ältere Einteilungen ohne
+  Resultate werden automatisch erneuert. Automatisch auslosen, manuell anpassbar.
+- Turnierbaum zum Ausdrucken (A4, je Kategorie ein Blatt oder alle zusammen) mit Start-Nr. und Verein,
+  Feldern für Lucky Loser, Spiel um Platz 3 und Rangierung 1.–4. zum Ausfüllen.
+- Eingabe nach Blatt: je Gruppe die erreichte Runde (nur die Runden, die es bei der Teilnehmerzahl gibt);
+  Ausgeschiedene einer Runde teilen sich den Platz, Hinweis bei abweichender Anzahl je Runde.
+- Auszeichnung „Beste X %, ganze Runden“: so viele ganze Runden, dass der Anteil (30 %) nicht überschritten
+  wird – wie in der Rangliste 2026 (z. B. 38 Gruppen: 11 Auszeichnungen).
+- JTSST Selektion automatisch: Serien der Pendelstafette und Seilziehen-Tableau teilt das Tool selbst ein –
+  nach dem Import der Anmeldungen, nach dem Import des Vorjahres und beim Öffnen der Seiten (solange noch
+  nichts eingeteilt ist). Kategorien mit erfassten Resultaten bleiben unverändert. „Alle neu einteilen“ unter
+  Stafetten → Selektion & Bahnen; dort erscheinen beim JTSST auch die Seilziehen-Kategorien.
+- JTSST Vorjahres-Rangliste: Import der Gesamt-Rangliste als PDF (Einstellungen → JTSST → Import) für
+  Pendelstafette, Hindernislauf, Schwedenstafette und Seilziehen; TSST- und JTSST-Vorjahr ersetzen sich
+  nicht mehr gegenseitig.
+- Serieneinteilung Pendelstafette (TSST PS80 und JTSST): Vorjahresbeste laufen in der letzten Serie; gesetzt
+  wird nur mit dem Vorjahresresultat der Gruppe 1 eines Vereins, nie mit dem einer 2. Gruppe. Vorjahr als
+  Spalte in „Bahnen & Serien“.
+
+## [0.7.3] – 2026-10-24
+- Trennung nach Sparte auch bei Teilnehmer, Top-Leistungen und Stafetten (Selektion & Bahnen).
+- Ranglisten-Übersicht ohne Stern-Symbol in den Kacheln.
+- Kacheln auf allen Seiten deutlich kompakter (kleinere Abstände/Schrift, Symbol neben dem Titel).
+
 ## [0.7.2] – 2026-10-24
 - Optische Trennung nach Sparte (Turnerinnen/Turner, Mädchen/Knaben) in der Erfassung, den
   Ranglisten, auf der Übersicht und in der Erfassungskontrolle – eigener Block bzw. Zwischenzeile

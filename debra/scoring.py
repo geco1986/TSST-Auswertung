@@ -126,7 +126,7 @@ def _kranz_grenze(anz_rangiert, kategorie, anz_angemeldet=None):
     """
     modus = _kf(kategorie, "kranz_modus", "prozent")
     wert = kategorie["kranz_wert"] or 0
-    if modus == "prozent":
+    if modus in ("prozent", "finalrunde"):   # finalrunde: Seilziehen, auf ganze Runden abgerundet
         basis = anz_rangiert
         if _kf(kategorie, "kranz_basis", "angemeldet") == "angemeldet":
             basis = _kf(kategorie, "anz_meldeschluss") or anz_angemeldet or anz_rangiert
@@ -272,12 +272,19 @@ def rangliste_einzel(conn, kategorie):
 
     rangiert = [e for e in gewertet if e["rang"] is not None]
     grenze = _kranz_grenze(len(rangiert), kategorie, len(eintraege))
+    if kategorie["kranz_modus"] == "finalrunde" and grenze is not None:
+        # Seilziehen: nur ganze Runden (gleicher Rang) auszeichnen, solange der Anteil reicht
+        bis_rang = 0
+        for e in rangiert:
+            if sum(1 for x in rangiert if x["rang"] <= e["rang"]) <= grenze:
+                bis_rang = max(bis_rang, e["rang"])
+        grenze = sum(1 for x in rangiert if x["rang"] <= bis_rang)
     for e in gewertet:
         e["auszeichnung"] = False
         e["marker"] = ""
         if e["rang"] is None:
             continue
-        if kategorie["kranz_modus"] in ("prozent", "rang") and grenze is not None:
+        if kategorie["kranz_modus"] in ("prozent", "rang", "finalrunde") and grenze is not None:
             e["auszeichnung"] = e["rang"] <= grenze
         elif kategorie["kranz_modus"] == "schwelle":
             schwelle = kategorie["kranz_wert"] or 0
