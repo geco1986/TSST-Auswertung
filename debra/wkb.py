@@ -18,6 +18,7 @@ bleiben unverändert.
 
 from .db import get_db
 
+# Vorlage 2026; Name, Ort und Datum stellt man unter Einstellungen ein (debra/anlass.py).
 EVENT_NAME = "Turn-, Spiel- und Stafettentag WTU 2026"
 EVENT_ORT = "Sportpark Deutweg, Winterthur"
 EVENT_DATUM = "2026-09-06"
@@ -64,8 +65,10 @@ def anwenden(conn=None):
             from .reihenfolge import standard
             standard(conn, tsst)
         cur.execute("UPDATE wettkampf SET aktiv=0")  # eindeutigen aktiven Wettkampf sicherstellen
+        from .anlass import daten
+        d = daten(conn, "tsst")
         cur.execute("UPDATE wettkampf SET name=?, ort=?, datum=?, aktiv=1 WHERE id=?",
-                    (EVENT_NAME, EVENT_ORT, EVENT_DATUM, tsst))
+                    (d["name"], d["ort"], d["datum"], tsst))
         bericht["wettkaempfe"] = 1
 
         kategorien = cur.execute(
@@ -120,13 +123,12 @@ def anwenden(conn=None):
 
     # Die Software kennt die drei Anlässe TSST, JTSST und JET: übrige Wettkämpfe entfernen.
     if wettkaempfe:
-        from .jet import EVENT_NAME as JET_NAME
-        from .jtsst import EVENT_NAME as JTSST_NAME
+        from .anlass import grundname
         cur.execute(
-            "DELETE FROM wettkampf WHERE name<>? AND name<>? AND id NOT IN "
+            "DELETE FROM wettkampf WHERE name NOT LIKE ? AND name NOT LIKE ? AND id NOT IN "
             "(SELECT DISTINCT wettkampf_id FROM kategorie WHERE sparte IN ('Turner','Turnerinnen') "
-            "OR sparte LIKE 'JET %')",
-            (JTSST_NAME, JET_NAME))
+            "OR sparte LIKE 'JET %' OR sparte IN ('Knaben','Mädchen'))",
+            (grundname("jtsst") + "%", grundname("jet") + "%"))
         # verwaiste Disziplinen (keiner Turner/Turnerinnen-Kategorie zugeordnet) löschen
         cur.execute(
             "DELETE FROM disziplin WHERE id NOT IN "

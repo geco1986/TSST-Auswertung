@@ -99,8 +99,7 @@ def importieren(backup_dir, reset=True):
         else:
             raise FileNotFoundError(f"Ordner nicht gefunden: {backup_dir}")
 
-    from .jet import EVENT_NAME as JET_NAME
-    from .jtsst import EVENT_NAME as JTSST_NAME
+    from .anlass import grundname
     from .wkb import ist_stafette
 
     init_db()
@@ -112,9 +111,10 @@ def importieren(backup_dir, reset=True):
         # und Zeitplan hängen per ON DELETE CASCADE am Wettkampf). Vereine bleiben,
         # weil die JTSST-Gruppen auf sie verweisen.
         # Der JET (eigener Anlass) bleibt ebenfalls erhalten.
-        cur.execute("DELETE FROM wettkampf WHERE name<>? AND name<>? AND id NOT IN "
-                    "(SELECT wettkampf_id FROM kategorie WHERE sparte LIKE 'JET %')",
-                    (JTSST_NAME, JET_NAME))
+        cur.execute("DELETE FROM wettkampf WHERE name NOT LIKE ? AND name NOT LIKE ? AND id NOT IN "
+                    "(SELECT wettkampf_id FROM kategorie WHERE sparte LIKE 'JET %' "
+                    "OR sparte IN ('Knaben','Mädchen'))",
+                    (grundname("jtsst") + "%", grundname("jet") + "%"))
         cur.execute("DELETE FROM disziplin WHERE id NOT IN "
                     "(SELECT DISTINCT disziplin_id FROM kategorie_disziplin)")
 

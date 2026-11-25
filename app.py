@@ -279,16 +279,15 @@ ANLASS_TITEL = {"tsst": "Turn-, Spiel- und Stafettentag", "jtsst": "Jugend Turn-
 
 def _anlaesse(db):
     """{'tsst'|'jtsst'|'jet': wettkampf-row|None} – erkannt an Namen und Sparten."""
-    from debra.jet import EVENT_NAME as JET_NAME
-    from debra.jtsst import EVENT_NAME as JTSST_NAME
+    from debra.anlass import ist_name
     res = {art: None for art in ANLAESSE}
     for w in db.execute(
             "SELECT w.*, MAX(k.sparte LIKE 'JET %') AS jet, MAX(k.sparte IN ('Knaben','Mädchen')) AS jugend, "
             "MAX(k.sparte IN ('Turner','Turnerinnen')) AS aktive FROM wettkampf w "
             "LEFT JOIN kategorie k ON k.wettkampf_id=w.id GROUP BY w.id ORDER BY w.id").fetchall():
-        if w["jet"] or w["name"] == JET_NAME:
+        if w["jet"] or ist_name("jet", w["name"]):
             art = "jet"
-        elif w["jugend"] or w["name"] == JTSST_NAME:
+        elif w["jugend"] or ist_name("jtsst", w["name"]):
             art = "jtsst"
         else:
             art = "tsst" if w["aktive"] else None
@@ -1566,7 +1565,8 @@ def rangliste_korrigieren(kid):
         return redirect(url_for("rangliste", kid=kid))
 
     daten = scoring.rangliste(db, kat)
-    berechnet = {e["teilnehmer_id"]: e for e in daten["eintraege"] + daten.get("sonder", [])}
+    berechnet = {e["teilnehmer_id"]: e for e in daten["eintraege"] + daten.get("sonder", [])
+                 if "teilnehmer_id" in e}          # Sektionswertung: Einträge je Verein, ohne Teilnehmer-ID
     teil = db.execute(
         "SELECT t.*, v.name AS verein_name FROM teilnehmer t LEFT JOIN verein v ON v.id=t.verein_id "
         "WHERE t.kategorie_id=? ORDER BY t.startnr", (kid,)).fetchall()
@@ -1960,19 +1960,36 @@ def wkb_anwenden():
     return redirect(url_for("dashboard"))
 
 
+def _anlass_daten_uebernehmen(art):
+    """Datum/Ort aus dem Anlegen-Formular prüfen und als Einstellung speichern. False bei Fehler."""
+    from debra import anlass
+    if "datum" not in request.form:
+        return True
+    datum = anlass.gueltiges_datum(request.form.get("datum"))
+    if not datum:
+        flash("Bitte ein gültiges Datum angeben (z. B. 05.09.2027).", "error")
+        return False
+    anlass.speichern(g.db, art, datum=datum, ort=(request.form.get("ort") or "").strip() or None)
+    g.db.commit()
+    return True
+
+
 @app.route("/konfiguration/jtsst", methods=["POST"])
 @superuser_required
 def jtsst_anlegen():
-    """Legt den Jugendwettkampf (JTSST) gemäss WKB 2026 an."""
+    """Legt den Jugendwettkampf (JTSST) gemäss WKB an – mit Datum und Ort aus dem Formular."""
     from debra.jtsst import anlegen
+    if not _anlass_daten_uebernehmen("jtsst"):
+        return redirect(url_for("einstellungen") + "#jtsst/import")
     try:
         b = anlegen(g.db)
+        w = _anlaesse(g.db)["jtsst"]
         if b["neu"]:
-            flash("Jugendwettkampf JTSST 2026 angelegt und aktiviert: "
-                  "{kategorien} Disziplinen/Kategorien.".format(**b), "ok")
+            flash(f"Jugendwettkampf angelegt und aktiviert: {w['name'] if w else 'JTSST'} – "
+                  f"{b['kategorien']} Disziplinen/Kategorien.", "ok")
         else:
-            flash("Jugendwettkampf JTSST 2026 ist bereits vorhanden – {angeglichen} "
-                  "Disziplinen an das DEBRA-Backup angeglichen.".format(**b), "ok")
+            flash(f"{w['name'] if w else 'JTSST'} ist bereits vorhanden – {b.get('angeglichen', 0)} "
+                  "Disziplinen an das DEBRA-Backup angeglichen.", "ok")
     except Exception as e:  # noqa: BLE001
         flash(f"JTSST konnte nicht angelegt werden: {e}", "error")
     return redirect(url_for("dashboard"))
@@ -2051,7 +2068,9 @@ def einstellungen():
                                 (w["id"],)).fetchall() if w else []
         teilnehmer = db.execute(f"SELECT COUNT(*) c FROM teilnehmer t WHERE t.wettkampf_id=? AND {OHNE_ABGEMELDETE}",
                                 (w["id"],)).fetchone()["c"] if w else 0
+        from debra import anlass
         anlaesse.append({"art": art, "w": w, "kategorien": kategorien, "teilnehmer": teilnehmer,
+                         "vorgabe": anlass.daten(db, art),
                          "stafetten": [k for k in kategorien if k["ist_stafette"]]})
     vorjahr_n = db.execute("SELECT COUNT(*) c FROM vorjahr WHERE COALESCE(sparte,'') NOT IN ('Knaben','Mädchen')"
                            ).fetchone()["c"]
@@ -2081,9 +2100,21 @@ def einstellungen_anlass(art):
         wid = w["id"]
         name = request.form.get("wk_name")
         if name is not None:
-            db.execute("UPDATE wettkampf SET name=?, ort=?, datum=? WHERE id=?",
-                       (name.strip(), request.form.get("wk_ort", "").strip(),
-                        request.form.get("wk_datum", "").strip(), wid))
+            from debra import anlass
+            name = name.strip() or w["name"]
+            ort = request.form.get("wk_ort", "").strip()
+            datum = anlass.gueltiges_datum(request.form.get("wk_datum"))
+            if not datum:
+                flash("Datum ungültig – bitte z. B. 06.09.2027 eingeben. Name, Ort und Datum nicht gespeichert.",
+                      "error")
+                datum = None
+            else:
+                alt_jahr = (w["datum"] or "")[:4]
+                # Jahr im Namen mitziehen, wenn nur das Datum geändert wurde
+                if name == w["name"] and alt_jahr and name.endswith(" " + alt_jahr) and datum[:4] != alt_jahr:
+                    name = name[: -len(alt_jahr)] + datum[:4]
+                db.execute("UPDATE wettkampf SET name=?, ort=?, datum=? WHERE id=?", (name, ort, datum, wid))
+                anlass.speichern(db, art, datum=datum, ort=ort or None)
         kats = db.execute("SELECT id, ist_stafette FROM kategorie WHERE wettkampf_id=?", (wid,)).fetchall()
         # Auszeichnung pro Kategorie (Modus + Wert)
         for kat in kats:
@@ -3563,11 +3594,14 @@ def jet_import_hochladen():
 @app.route("/konfiguration/jet", methods=["POST"])
 @superuser_required
 def jet_anlegen():
-    """Legt den Jugend-Einzelturntag (JET) gemäss WKB 2026 an."""
+    """Legt den Jugend-Einzelturntag (JET) gemäss WKB an – mit Datum und Ort aus dem Formular."""
     from debra.jet import anlegen
+    if not _anlass_daten_uebernehmen("jet"):
+        return redirect(url_for("einstellungen") + "#jet/import")
     b = anlegen(g.db)
     if b["neu"]:
-        flash(f"JET 2026 angelegt: {b['kategorien']} Kategorien (Mädchen/Knaben A–E).", "ok")
+        w = _anlaesse(g.db)["jet"]
+        flash(f"{w['name'] if w else 'JET'} angelegt: {b['kategorien']} Kategorien (Mädchen/Knaben A–E).", "ok")
     else:
         flash(f"JET ist bereits vorhanden ({b['kategorien']} Kategorien).", "ok")
     return redirect(url_for("einstellungen") + "#jet/import")
@@ -3580,6 +3614,15 @@ try:
     if _c.execute("SELECT 1 FROM kategorie WHERE berechnung='jet' LIMIT 1").fetchone():
         from debra.jet import formeln_sicherstellen
         formeln_sicherstellen(_c)       # JET-Formeln anlegen und Tabellen daraus erzeugen
+    # Datum/Ort bestehender Anlässe als Einstellung übernehmen (sonst würde „WKB anwenden“
+    # bzw. erneutes Anlegen die Vorgabe statt des eingestellten Jahres verwenden)
+    from debra import anlass as _anlass
+    for _start_art, _start_w in _anlaesse(_c).items():
+        if _start_w and _anlass.gueltiges_datum(_start_w["datum"]) and not _c.execute(
+                "SELECT 1 FROM einstellung WHERE schluessel=?", (f"anlass_{_start_art}_datum",)).fetchone():
+            _anlass.speichern(_c, _start_art, datum=_anlass.gueltiges_datum(_start_w["datum"]),
+                              ort=_start_w["ort"] or None)
+    _c.commit()
     _c.close()
 except Exception:  # noqa: BLE001
     pass

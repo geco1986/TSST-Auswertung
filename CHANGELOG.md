@@ -8,6 +8,30 @@ Alle wesentlichen Änderungen an DEBRA-Web.
   (ohne Passwort), Zugriff über WLAN/Internet nur mit Passwort (Caddy), DuckDNS-Updater und
   optional Tailscale Funnel.
 
+## [0.7.6] – 2026-11-25
+- Anlass-Jahr einstellbar: Datum und Ort beim Anlegen von JTSST und JET wählbar, der Name erhält das Jahr
+  aus dem Datum („… WTU 2027“). Ändert man im Reiter „Anlass“ nur das Datum, zieht das Jahr im Namen mit.
+  „WKB anwenden“ und der Backup-Import behalten das eingestellte Jahr bzw. erkennen JTSST/JET jahresunabhängig.
+- Mehrplatzbetrieb: Raster-, Schnell-, Stafetten- und JET-Erfassung speichern nur geänderte Felder. Hat
+  jemand anders den Wert inzwischen geändert, wird nicht überschrieben, sondern ein Konflikt gemeldet.
+- Rolle Chef mit Passwort, optionale Eingeber-PIN (Einstellungen → Allgemein → Passwörter).
+- Vier-Augen-Kontrolle: eigene Eingaben nicht quittierbar; jede spätere Änderung setzt die Kontrolle zurück.
+- Nach „Disziplin abschliessen“ bzw. WKL-Freigabe können nur noch Chef/Superuser Resultate ändern;
+  eine Änderung setzt „Rangliste gedruckt“ zurück.
+- Eingaben werden auf dem Server geprüft: ungültige Zahlen/Zeiten mit Meldung statt still verworfen,
+  Werte ausserhalb der Plausibilität mit Warnung, doppelte Startnummern abgelehnt.
+- Lückenloses Änderungsprotokoll für Teilnehmende (alle Felder, Nachmeldung, Löschen, Vermerke) und
+  Stafetten (alter Wert, Übergabefehler, Löschen).
+- Datensicherung: Download über die SQLite-Sicherungsfunktion (inkl. WAL, vorher konnten neueste
+  Eingaben fehlen), nur Chef/Superuser; automatische Sicherung alle 15 Minuten nach `sicherungen/`.
+- Sicherheit: Schutz vor fremden Formular-Absendungen (Origin-Prüfung), Login-Weiterleitung nur auf eigene
+  Seiten, „Wettkampf aktivieren“ nur per Formular, zufälliges Session-Secret statt festem Schlüssel.
+- Löschschutz: Vereine, Kategorien und Disziplinen, die noch verwendet werden, lassen sich nicht löschen.
+- Seilziehen: Auszeichnungsregel wird nur von „Beste X %“ auf ganze Runden umgestellt; Eingabe leeren nur Chef.
+- Behoben: Absturz bei `/liste/abschluss/xlsx`, Serverfehler bei Buchstaben im Kategorie-Formular,
+  Absturz der Korrektur-Seite bei Sektionswertung.
+- Automatische Tests (`tests/`).
+
 ## [0.7.5] – 2026-11-02
 - Einsatzplan (Menü „Einsatzplan“, für TSST, JTSST und JET): Anlagen und Minuten je Turner:in werden je
   Disziplin gepflegt und gelten für alle Kategorien, Knaben und Mädchen gemeinsam (0 Anlagen = Disziplin

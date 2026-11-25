@@ -8,7 +8,7 @@ Stafetten, Auszeichnungen) setzt anschliessend wkb.anwenden().
 """
 
 from .db import get_db
-from .wkb import EVENT_DATUM, EVENT_NAME, EVENT_ORT
+from .anlass import daten, grundname
 
 # sparte -> [(kürzel, bezeichnung, kat_nr)]
 DISZIPLINEN = {
@@ -39,12 +39,14 @@ def anlegen(conn=None):
     row = cur.execute(
         "SELECT DISTINCT wettkampf_id AS id FROM kategorie WHERE sparte IN ('Turner','Turnerinnen') "
         "ORDER BY wettkampf_id").fetchone() or cur.execute(
-        "SELECT id FROM wettkampf WHERE name=?", (EVENT_NAME,)).fetchone()
+        "SELECT id FROM wettkampf WHERE name LIKE ? AND name NOT LIKE 'Jugend%'",
+        (grundname("tsst") + "%",)).fetchone()
     if row:
         wk = row["id"]
     else:
+        d = daten(conn, "tsst")
         cur.execute("INSERT INTO wettkampf(name, ort, datum, aktiv) VALUES(?,?,?,0)",
-                    (EVENT_NAME, EVENT_ORT, EVENT_DATUM))
+                    (d["name"], d["ort"], d["datum"]))
         wk = cur.lastrowid
     bericht["wettkampf_id"] = wk
 

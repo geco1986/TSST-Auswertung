@@ -1,6 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Einstellungen{% endblock %}
 {% block content %}
+{% macro anlegen_formular(endpunkt, kurz, d) %}
+<form method="post" action="{{ url_for(endpunkt) }}" class="stack" style="max-width:none;">
+  <div class="grid-2">
+    <div><label>Datum des Anlasses</label>
+      <input type="date" name="datum" value="{{ d.datum }}" required
+             oninput="var j=this.value.slice(0,4); if(j) this.form.querySelectorAll('.jahr').forEach(function(b){b.textContent=j;});"></div>
+    <div><label>Ort</label><input type="text" name="ort" value="{{ d.ort }}"></div>
+  </div>
+  <div><button class="btn primary" type="submit">{{ kurz }} <span class="jahr">{{ d.jahr }}</span> anlegen</button></div>
+  <p class="muted" style="font-size:13px;margin:0;">Der Name wird „… <span class="jahr">{{ d.jahr }}</span>“; das Jahr kommt aus dem Datum.</p>
+</form>
+{% endmacro %}
 <div class="page-head"><div><h1>Einstellungen</h1>
   <p class="sub">Alles auf einer Seite – oben der Anlass, darunter die Art der Einstellung
     {%- if not ist_superuser %} · als Chef nur der aktive Anlass; andere Anlässe aktiv setzen kann nur der Superuser{% endif %}</p></div></div>
@@ -130,10 +142,12 @@
         <div><label>Name</label><input type="text" name="wk_name" value="{{ w.name }}"></div>
         <div class="grid-2">
           <div><label>Ort</label><input type="text" name="wk_ort" value="{{ w.ort or '' }}"></div>
-          <div><label>Datum</label><input type="text" name="wk_datum" value="{{ w.datum or '' }}"></div>
+          <div><label>Datum</label><input type="date" name="wk_datum" value="{{ (w.datum or '')[:10] }}"></div>
         </div>
       </div>
-      <p class="muted" style="font-size:13px;">{{ a.kategorien|length }} Kategorien · {{ a.teilnehmer }} Anmeldungen</p>
+      <p class="muted" style="font-size:13px;">{{ a.kategorien|length }} Kategorien · {{ a.teilnehmer }} Anmeldungen<br>
+        Ändert man nur das Datum, wird das Jahr im Namen automatisch angepasst. Datum und Ort gelten auch beim
+        erneuten Anlegen bzw. „WKB anwenden“.{% if art == 'jet' %} Beim JET bestimmt das Jahr die Kategorien (Jahrgänge).{% endif %}</p>
     </div>
 
     <div class="tab-teil" data-teil="auszeichnungen">
@@ -275,10 +289,16 @@
         <a href="{{ url_for('vorjahr_ansicht') }}">Ansehen</a></p>
       {% endif %}
     {% elif art == 'jtsst' %}
-      <h3 style="margin-top:0;">Jugendwettkämpfe (JTSST 2026)</h3>
-      <p class="muted">Legt den Wettkampf gemäss WKB Jugendwettkämpfe 2026 (05.09.2026) an: Knaben/Mädchen Kat. A/B/C,
+      <h3 style="margin-top:0;">Jugendwettkämpfe (JTSST {{ w.datum[:4] if w and w.datum else a.vorgabe.jahr }})</h3>
+      <p class="muted">Legt den Wettkampf gemäss WKB Jugendwettkämpfe an (Programm Stand 2026): Knaben/Mädchen Kat. A/B/C,
         Seilziehen (Cup-Rang), Pendelstafette, Ballwurf, Hindernislauf, Seilspringen, Schwedenstafette (Kat. A); 30% Auszeichnungen.</p>
-{% if ist_superuser %}<form method="post" action="{{ url_for('jtsst_anlegen') }}"><button class="btn" type="submit">JTSST 2026 anlegen</button></form>{% endif %}
+      {% if w %}
+        <p class="muted" style="font-size:13px;">Angelegt: <strong>{{ w.name }}</strong>{% if w.datum %}, {{ w.datum }}{% endif %}
+          – Name, Ort und Datum ändern unter dem Reiter „Anlass“.</p>
+        {% if ist_superuser %}<form method="post" action="{{ url_for('jtsst_anlegen') }}"><button class="btn" type="submit">Disziplinen an DEBRA-Backup angleichen</button></form>{% endif %}
+      {% elif ist_superuser %}
+        {{ anlegen_formular('jtsst_anlegen', 'JTSST', a.vorgabe) }}
+      {% endif %}
       <hr class="soft">
       <h3>Anmeldungen importieren</h3>
       {% if ist_superuser %}
@@ -312,11 +332,12 @@
       </form>
       {% endif %}
     {% else %}
-      <h3 style="margin-top:0;">Jugend-Einzelturntag (JET 2026)</h3>
-      <p class="muted">Eigener Anlass gemäss WKB JET 2026 (05.07.2026, Rheinau): Mädchen/Knaben Kat. A–C (6-Kampf) und
-        D/E (4-Kampf), Geräte, Leichtathletik und Plausch frei wählbar, Noten über die Wertungstabelle, 30% Auszeichnungen.</p>
+      <h3 style="margin-top:0;">Jugend-Einzelturntag (JET {{ w.datum[:4] if w and w.datum else a.vorgabe.jahr }})</h3>
+      <p class="muted">Eigener Anlass gemäss WKB JET (Programm Stand 2026): Mädchen/Knaben Kat. A–C (6-Kampf) und
+        D/E (4-Kampf), Geräte, Leichtathletik und Plausch frei wählbar, Noten über die Wertungstabelle, 30% Auszeichnungen.
+        Die Kategorien ergeben sich aus Jahrgang und Wettkampfjahr.</p>
+      {% if not w and ist_superuser %}{{ anlegen_formular('jet_anlegen', 'JET', a.vorgabe) }}{% endif %}
       <div class="btn-row">
-        {% if not w and ist_superuser %}<form method="post" action="{{ url_for('jet_anlegen') }}"><button class="btn" type="submit">JET 2026 anlegen</button></form>{% endif %}
         {% if ist_superuser %}<a class="btn {{ 'primary' if w }}" href="{{ url_for('jet_import') }}">Anmeldungen importieren</a>{% endif %}
       </div>
       {% if not ist_superuser %}<p class="muted" style="font-size:13px;"><strong>Nur der Superuser</strong> kann Importe durchführen.</p>{% endif %}

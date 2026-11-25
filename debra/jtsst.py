@@ -162,7 +162,10 @@ def anlegen(conn=None, aktivieren=True):
     cur = conn.cursor()
     bericht = {"neu": False, "wettkampf_id": None, "kategorien": 0}
 
-    vorhanden = cur.execute("SELECT id FROM wettkampf WHERE name=?", (EVENT_NAME,)).fetchone()
+    from .anlass import daten, grundname
+    vorhanden = cur.execute(
+        "SELECT id FROM wettkampf WHERE name LIKE ? OR id IN (SELECT wettkampf_id FROM kategorie "
+        "WHERE sparte IN ('Knaben','Mädchen')) ORDER BY id LIMIT 1", (grundname("jtsst") + "%",)).fetchone()
     if vorhanden:
         bericht["wettkampf_id"] = vorhanden["id"]
         bericht["kategorien"] = cur.execute(
@@ -172,8 +175,9 @@ def anlegen(conn=None, aktivieren=True):
     else:
         if aktivieren:
             cur.execute("UPDATE wettkampf SET aktiv=0")
+        d = daten(conn, "jtsst")
         cur.execute("INSERT INTO wettkampf(name, ort, datum, aktiv) VALUES(?,?,?,?)",
-                    (EVENT_NAME, EVENT_ORT, EVENT_DATUM, 1 if aktivieren else 0))
+                    (d["name"], d["ort"], d["datum"], 1 if aktivieren else 0))
         wk = cur.lastrowid
         bericht.update(neu=True, wettkampf_id=wk)
 

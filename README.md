@@ -91,9 +91,26 @@ DuckDNS/Tailscale: siehe **[NUC.md](NUC.md)**. Die Installationskarte erstellt
 | Variable        | Default                | Bedeutung |
 |-----------------|------------------------|-----------|
 | `DEBRA_DB`      | `/data/debra.sqlite3`  | Pfad zur SQLite-Datenbank |
-| `DEBRA_SECRET`  | `debra-…-dev-key`      | Session-Secret – **unbedingt setzen** |
+| `DEBRA_SECRET`  | zufällig (`secret.txt` neben der DB) | Session-Secret |
 | `DEBRA_SEED`    | `1`                    | `1` = bei leerer DB Demo-Daten laden, `0` = leer |
 | `HOST` / `PORT` | `0.0.0.0` / `5000`     | Bind-Adresse/Port |
+| `DEBRA_SICHERUNG_MINUTEN` | `15`         | Automatische Sicherung nach `sicherungen/` neben der DB (nur bei Änderungen), `0` = aus |
+| `DEBRA_SICHERUNG_BEHALTEN` | `200`       | So viele automatische Sicherungen bleiben erhalten |
+
+## Rollen und Anmeldung
+- **Eingeber**: Resultate und Teilnehmende erfassen. Optional mit gemeinsamer PIN.
+- **Chef**: zusätzlich Ranglisten, Listen, Stafetten, Einstellungen des aktiven Anlasses – **mit Passwort**.
+  Solange kein Chef-Passwort festgelegt ist, ist die Chef-Anmeldung gesperrt.
+- **Superuser**: alle Anlässe, Importe, Wertungsformeln; legt unter *Einstellungen → Allgemein → Passwörter*
+  das Chef-Passwort und die Eingeber-PIN fest.
+
+Jede Person meldet sich mit eigener Kennung an: Eigene Eingaben kann man im Kontrollblatt nicht selbst quittieren.
+
+## Tests
+```bash
+pip install pytest && python -m pytest tests
+```
+Die Tests verwenden eine eigene Datenbank mit Demo-Daten.
 
 ## Echte Daten laden
 In der App unter **Einstellungen**:

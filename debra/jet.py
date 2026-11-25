@@ -148,9 +148,10 @@ def ist_jet(kat):
 # --------------------------------------------------------------------------- #
 def wettkampf(conn):
     """Wettkampf-Row des JET oder None."""
+    from .anlass import grundname
     return conn.execute(
-        "SELECT * FROM wettkampf WHERE name=? OR id IN (SELECT wettkampf_id FROM kategorie "
-        "WHERE sparte LIKE 'JET %') ORDER BY id LIMIT 1", (EVENT_NAME,)).fetchone()
+        "SELECT * FROM wettkampf WHERE name LIKE ? OR id IN (SELECT wettkampf_id FROM kategorie "
+        "WHERE sparte LIKE 'JET %') ORDER BY id LIMIT 1", (grundname("jet") + "%",)).fetchone()
 
 
 def _disziplin_id(cur, abk):
@@ -174,8 +175,10 @@ def anlegen(conn=None, aktivieren=False):
     if w is None:
         if aktivieren:
             cur.execute("UPDATE wettkampf SET aktiv=0")
+        from .anlass import daten
+        d = daten(conn, "jet")
         cur.execute("INSERT INTO wettkampf(name, ort, datum, aktiv) VALUES(?,?,?,?)",
-                    (EVENT_NAME, EVENT_ORT, EVENT_DATUM, 1 if aktivieren else 0))
+                    (d["name"], d["ort"], d["datum"], 1 if aktivieren else 0))
         wk = cur.lastrowid
         bericht["wettkampf_id"] = wk
         sort = 0
