@@ -9,6 +9,8 @@ Konfiguration über Umgebungsvariablen:
   DEBRA_SEED    "1" = bei leerer DB Demo-Daten laden, "0" (Default) = nicht
   HOST / PORT   Bind-Adresse/Port (Default 0.0.0.0:5000)
   DEBRA_URL_PREFIX  Optionaler Unterpfad, z. B. /tsst (die App bleibt auch unter / erreichbar)
+  DEBRA_SICHERUNG_MINUTEN  Automatische Sicherung nach sicherungen/ neben der DB (Default 15, 0 = aus)
+  DEBRA_SICHERUNG_BEHALTEN Anzahl automatischer Sicherungen, die bleiben (Default 200)
 """
 import os
 
@@ -51,4 +53,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
     print(f"Auswertung TSST läuft auf http://{host}:{port}  (Rolle beim Login wählen)")
     praefix = os.environ.get("DEBRA_URL_PREFIX", "").rstrip("/")
+    from debra import sicherung
+    if sicherung.starten():
+        print(f"Automatische Sicherung alle {sicherung.intervall_minuten()} Minuten nach {sicherung.ordner()}")
     serve(Unterpfad(app, praefix) if praefix else app, host=host, port=port, threads=8)

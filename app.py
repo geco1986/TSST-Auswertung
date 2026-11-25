@@ -14,12 +14,38 @@ from flask import (Flask, Response, abort, flash, g, redirect,
 
 from debra.db import (DB_PATH, get_active_wettkampf, get_db, get_setting,
                       init_db, set_setting)
-from debra import __version__, scoring
+from debra import __version__, scoring, sicherung
 from debra.seed import seed
 
+def _secret_key():
+    """DEBRA_SECRET bzw. ein zufälliger Schlüssel in secret.txt neben der Datenbank (nie ein fester)."""
+    s = os.environ.get("DEBRA_SECRET", "").strip()
+    if s:
+        return s
+    pfad = os.path.join(os.path.dirname(os.path.abspath(DB_PATH)), "secret.txt")
+    try:
+        with open(pfad, encoding="utf-8") as f:
+            s = f.read().strip()
+    except OSError:
+        s = ""
+    if not s:
+        import secrets
+        s = secrets.token_urlsafe(48)
+        try:
+            os.makedirs(os.path.dirname(pfad), exist_ok=True)
+            fd = os.open(pfad, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(s)
+        except OSError:
+            pass                                  # dann gilt der Schlüssel nur bis zum Neustart
+    return s
+
+
 app = Flask(__name__)
-app.secret_key = os.environ.get("DEBRA_SECRET", "debra-turnverein-dev-key")
+app.secret_key = _secret_key()
 app.config["MAX_CONTENT_LENGTH"] = 256 * 1024 * 1024     # Upload von Import-Dateien (ZIP/Backups)
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
 
 GERAETE_EINHEITEN = ["Note", "Zeit", "Weite", "Hoehe", "Anzahl"]
 KATEGORIE_TYPEN = {"einzel": "Einzel", "sektion": "Sektion", "gruppe": "Gruppe"}
@@ -29,8 +55,37 @@ KRANZ_MODI = {"keiner": "Keine Auszeichnung", "prozent": "Beste X %",
 
 
 # --------------------------------------------------------------------------- #
-# Auth (wie im Original: Login als "Chef", kein Passwort)
+# Auth: Eingeber (optional PIN), Chef (Passwort), Superuser (Passwort)
 # --------------------------------------------------------------------------- #
+def _sicheres_ziel(ziel, standard=None):
+    """Nur Weiterleitungen auf eigene Seiten (kein //fremd.ch, keine https://…-Adressen)."""
+    ziel = (ziel or "").strip()
+    if ziel.startswith("/") and not ziel.startswith("//") and "\\" not in ziel and ":" not in ziel.split("?")[0]:
+        return ziel
+    return standard or url_for("dashboard")
+
+
+@app.before_request
+def herkunft_pruefen():
+    """Schutz vor fremden Formular-Absendungen (CSRF): POST nur von Seiten dieser App.
+
+    Browser senden bei jedem POST den Origin- bzw. Referer-Header mit; stammt er von einer
+    anderen Adresse, wird die Anfrage abgelehnt. Anfragen ohne beide Header (Skripte) gehen durch.
+    """
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return None
+    quelle = request.headers.get("Origin") or request.headers.get("Referer")
+    if not quelle:
+        return None
+    from urllib.parse import urlsplit
+    erlaubt = {request.host, request.headers.get("X-Forwarded-Host", "")}
+    if urlsplit(quelle).netloc not in erlaubt:
+        app.logger.warning("POST abgelehnt: Herkunft %s, Host %s, Pfad %s", quelle, request.host, request.path)
+        return Response("Abgelehnt: Das Formular stammt nicht von dieser Seite. Bitte die Seite neu laden "
+                        "und nochmals versuchen.", status=403, mimetype="text/plain")
+    return None
+
+
 def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
@@ -298,6 +353,14 @@ def inject_globals():
 def login():
     from werkzeug.security import check_password_hash, generate_password_hash
     pw_hash = get_setting("superuser_passwort")
+    chef_hash = get_setting("chef_passwort")
+    pin_hash = get_setting("eingeber_pin")
+
+    def seite(offen=None):
+        return render_template("login.html", pw_gesetzt=bool(pw_hash), chef_gesetzt=bool(chef_hash),
+                               pin_gesetzt=bool(pin_hash), offen=offen,
+                               kennung=(request.form.get("kennung") or "").strip())
+
     if request.method == "POST":
         rolle = request.form.get("rolle", "eingeber")
         if rolle not in ROLLEN:
@@ -308,19 +371,56 @@ def login():
                 # erste Anmeldung: Passwort festlegen
                 if len(pw) < 6 or pw != (request.form.get("passwort2") or ""):
                     flash("Superuser-Passwort festlegen: mindestens 6 Zeichen, zweimal gleich eingeben.", "error")
-                    return render_template("login.html", pw_gesetzt=False, super_offen=True)
+                    return seite("superuser")
                 set_setting("superuser_passwort", generate_password_hash(pw))
                 flash("Superuser-Passwort festgelegt.", "ok")
             elif not check_password_hash(pw_hash, pw):
                 flash("Falsches Superuser-Passwort.", "error")
-                return render_template("login.html", pw_gesetzt=True, super_offen=True)
+                return seite("superuser")
+        elif rolle == "chef":
+            if not chef_hash:
+                flash("Für die Rolle Chef ist noch kein Passwort festgelegt. Der Superuser legt es unter "
+                      "Einstellungen → Allgemein → Passwörter fest.", "error")
+                return seite("chef")
+            if not check_password_hash(chef_hash, request.form.get("chef_passwort") or ""):
+                flash("Falsches Chef-Passwort.", "error")
+                return seite("chef")
+        elif pin_hash and not check_password_hash(pin_hash, request.form.get("pin") or ""):
+            flash("Falsche Eingeber-PIN.", "error")
+            return seite()
         session.clear()
         session["user"] = ROLLEN[rolle]
         session["rolle"] = rolle
         kennung = (request.form.get("kennung") or "").strip()
         session["kennung"] = kennung or ("Eingabe" if rolle == "eingeber" else ROLLEN[rolle])
-        return redirect(request.args.get("next") or url_for("dashboard"))
-    return render_template("login.html", pw_gesetzt=bool(pw_hash), super_offen=False)
+        return redirect(_sicheres_ziel(request.args.get("next")))
+    return seite()
+
+
+@app.route("/passwoerter", methods=["POST"])
+@superuser_required
+def passwoerter():
+    """Chef-Passwort und Eingeber-PIN festlegen (Einstellungen → Allgemein → Passwörter)."""
+    from werkzeug.security import generate_password_hash
+    was = request.form.get("was")
+    neu, neu2 = request.form.get("neu") or "", request.form.get("neu2") or ""
+    if was == "chef":
+        if len(neu) < 6 or neu != neu2:
+            flash("Chef-Passwort: mindestens 6 Zeichen, zweimal gleich eingeben.", "error")
+        else:
+            set_setting("chef_passwort", generate_password_hash(neu))
+            flash("Chef-Passwort festgelegt.", "ok")
+    elif was == "pin":
+        if request.form.get("entfernen"):
+            g.db.execute("DELETE FROM einstellung WHERE schluessel='eingeber_pin'")
+            g.db.commit()
+            flash("Eingeber-PIN entfernt – Eingeber melden sich ohne PIN an.", "ok")
+        elif len(neu) < 4 or neu != neu2:
+            flash("Eingeber-PIN: mindestens 4 Zeichen, zweimal gleich eingeben.", "error")
+        else:
+            set_setting("eingeber_pin", generate_password_hash(neu))
+            flash("Eingeber-PIN festgelegt.", "ok")
+    return redirect(url_for("einstellungen") + "#allgemein/superuser")
 
 
 @app.route("/superuser/passwort", methods=["POST"])
@@ -399,7 +499,7 @@ def wettkaempfe():
     return render_template("wettkaempfe.html", liste=liste)
 
 
-@app.route("/wettkaempfe/<int:wid>/aktiv")
+@app.route("/wettkaempfe/<int:wid>/aktiv", methods=["POST"])
 @superuser_required
 def wettkampf_aktiv(wid):
     db = g.db
@@ -407,7 +507,7 @@ def wettkampf_aktiv(wid):
     db.execute("UPDATE wettkampf SET aktiv=1 WHERE id=?", (wid,))
     db.commit()
     flash("Aktiver Wettkampf gewechselt.", "ok")
-    return redirect(request.referrer or url_for("dashboard"))
+    return redirect(url_for("wettkaempfe"))
 
 
 @app.route("/anlass/<art>", methods=["POST"])
@@ -479,6 +579,11 @@ def vereine():
 @app.route("/vereine/<int:vid>/loeschen", methods=["POST"])
 @chef_required
 def verein_loeschen(vid):
+    n = g.db.execute("SELECT COUNT(*) c FROM teilnehmer WHERE verein_id=?", (vid,)).fetchone()["c"]
+    if n:
+        flash(f"Verein nicht gelöscht: {n} Anmeldung(en) gehören noch dazu (in allen Anlässen). "
+              "Zuerst umteilen oder löschen.", "error")
+        return redirect(url_for("vereine"))
     g.db.execute("DELETE FROM verein WHERE id=?", (vid,))
     g.db.commit()
     flash("Verein gelöscht.", "ok")
@@ -513,6 +618,14 @@ def disziplinen():
 @app.route("/disziplinen/<int:did>/loeschen", methods=["POST"])
 @chef_required
 def disziplin_loeschen(did):
+    kats = g.db.execute("SELECT k.bezeichnung, w.name AS wk FROM kategorie_disziplin kd "
+                        "JOIN kategorie k ON k.id=kd.kategorie_id JOIN wettkampf w ON w.id=k.wettkampf_id "
+                        "WHERE kd.disziplin_id=?", (did,)).fetchall()
+    if kats:
+        liste = ", ".join(sorted({k["bezeichnung"] for k in kats}))
+        flash(f"Disziplin nicht gelöscht: Sie wird noch in {len(kats)} Kategorie(n) verwendet ({liste}). "
+              "Der Disziplinen-Katalog gilt für alle Anlässe.", "error")
+        return redirect(url_for("disziplinen"))
     g.db.execute("DELETE FROM disziplin WHERE id=?", (did,))
     g.db.commit()
     flash("Disziplin gelöscht.", "ok")
@@ -568,21 +681,32 @@ def kategorie_form(kid=None):
         if not kat:
             abort(404)
     if request.method == "POST":
+        def zahl(feld, typ):
+            text = (request.form.get(feld) or "").strip().replace(",", ".")
+            try:
+                return typ(text) if text else 0
+            except ValueError:
+                fehlerhaft.append(feld)
+                return 0
+        fehlerhaft = []
         felder = dict(
             abk=request.form.get("abk", ""),
             bezeichnung=request.form.get("bezeichnung", "").strip(),
             typ=request.form.get("typ", "einzel"),
             geschlecht=request.form.get("geschlecht", "alle"),
-            streich=int(request.form.get("streich") or 0),
+            streich=zahl("streich", int),
             kranz_modus=request.form.get("kranz_modus", "prozent"),
-            kranz_wert=float(request.form.get("kranz_wert") or 0),
+            kranz_wert=zahl("kranz_wert", float),
             berechnung=request.form.get("berechnung", "summe"),
-            anzahl_werte=int(request.form.get("anzahl_werte") or 0),
+            anzahl_werte=zahl("anzahl_werte", int),
             richtung=request.form.get("richtung", "hoch"),
             einheit=request.form.get("einheit", "").strip(),
         )
         gewaehlt = request.form.getlist("disziplinen")
-        if not felder["bezeichnung"]:
+        if fehlerhaft:
+            namen = {"streich": "Streichresultate", "kranz_wert": "Auszeichnungs-Wert", "anzahl_werte": "Anzahl Werte"}
+            flash("Bitte eine Zahl eingeben bei: " + ", ".join(namen[f] for f in fehlerhaft) + ".", "error")
+        elif not felder["bezeichnung"]:
             flash("Bezeichnung fehlt.", "error")
         else:
             if kid:
@@ -619,6 +743,11 @@ def kategorie_form(kid=None):
 @app.route("/kategorien/<int:kid>/loeschen", methods=["POST"])
 @chef_required
 def kategorie_loeschen(kid):
+    n = g.db.execute("SELECT COUNT(*) c FROM teilnehmer WHERE kategorie_id=?", (kid,)).fetchone()["c"]
+    if n:
+        flash(f"Kategorie nicht gelöscht: {n} Anmeldung(en) sind noch eingeteilt. Zuerst umteilen oder "
+              "unter Teilnehmende löschen.", "error")
+        return redirect(url_for("kategorien"))
     g.db.execute("DELETE FROM kategorie WHERE id=?", (kid,))
     g.db.commit()
     flash("Kategorie gelöscht.", "ok")
@@ -729,6 +858,21 @@ def teilnehmer_form(tid=None):
         pruefung = _jet_kategorie_pruefen(db, felder[6], felder[3], felder[4]) if ist_jet else None
         felder = tuple(felder)
         abweichung_ok = _ist_chef() and request.form.get("abweichung_ok")
+        doppelt = db.execute("SELECT id FROM teilnehmer WHERE wettkampf_id=? AND startnr=? AND id<>?",
+                             (g.wettkampf["id"], felder[0], tid or 0)).fetchone()
+        kat_alt = db.execute("SELECT * FROM kategorie WHERE id=?", (tn["kategorie_id"],)).fetchone() \
+            if tn and tn["kategorie_id"] else None
+        kat_neu = db.execute("SELECT * FROM kategorie WHERE id=?", (felder[6],)).fetchone() if felder[6] else None
+        sperre = _gesperrt(kat_alt) or (_gesperrt(kat_neu) if not tn or felder[6] != tn["kategorie_id"] else None)
+        if sperre:
+            flash(sperre, "error")
+            return redirect(url_for("teilnehmer"))
+        if doppelt:
+            flash(f"Startnummer {felder[0]} ist in diesem Anlass schon vergeben – bitte eine andere wählen "
+                  "(leer lassen = nächste freie).", "error")
+            eingabe = dict(zip(("startnr", "vorname", "nachname", "jahrgang", "geschlecht", "verein_id",
+                                "kategorie_id", "stationsnr", "status", "bemerkung"), felder), id=tid)
+            return _teilnehmer_form_seite(db, eingabe, None)
         if not felder[2] and not felder[5]:
             flash("Bitte einen Namen oder einen Verein angeben.", "error")
         elif ist_jet and not felder[6]:
@@ -743,15 +887,54 @@ def teilnehmer_form(tid=None):
             db.execute("UPDATE teilnehmer SET startnr=?, vorname=?, nachname=?, jahrgang=?, "
                        "geschlecht=?, verein_id=?, kategorie_id=?, stationsnr=?, status=?, "
                        "bemerkung=? WHERE id=?", felder + (tid,))
+            _teilnehmer_aenderungen_loggen(db, tn, felder)
             db.commit(); flash("Teilnehmer gespeichert.", "ok")
             return redirect(url_for("teilnehmer"))
         else:
-            db.execute("INSERT INTO teilnehmer(wettkampf_id, startnr, vorname, nachname, jahrgang, "
-                       "geschlecht, verein_id, kategorie_id, stationsnr, status, bemerkung) "
-                       "VALUES(?,?,?,?,?,?,?,?,?,?,?)", (g.wettkampf["id"], *felder))
+            cur = db.execute("INSERT INTO teilnehmer(wettkampf_id, startnr, vorname, nachname, jahrgang, "
+                             "geschlecht, verein_id, kategorie_id, stationsnr, status, bemerkung) "
+                             "VALUES(?,?,?,?,?,?,?,?,?,?,?)", (g.wettkampf["id"], *felder))
+            _log(db, "nachmeldung", cur.lastrowid, felder[6], "Teilnehmer", "",
+                 _tn_bezeichnung(db, cur.lastrowid))
             db.commit(); flash("Teilnehmer hinzugefügt.", "ok")
             return redirect(url_for("teilnehmer_form"))  # gleich nächsten erfassen
     return _teilnehmer_form_seite(db, tn, None)
+
+
+TN_FELDER = ("startnr", "vorname", "nachname", "jahrgang", "geschlecht", "verein_id", "kategorie_id",
+             "stationsnr", "status", "bemerkung")
+TN_FELD_NAMEN = {"startnr": "Start-Nr.", "vorname": "Vorname", "nachname": "Nachname", "jahrgang": "Jahrgang",
+                 "geschlecht": "Geschlecht", "verein_id": "Verein", "kategorie_id": "Kategorie",
+                 "stationsnr": "Station", "status": "Vermerk", "bemerkung": "Bemerkung"}
+
+
+def _tn_bezeichnung(db, tid):
+    """„Nr. 12 Muster Anna, TV Beispiel“ – für das Protokoll (auch nach dem Löschen lesbar)."""
+    t = db.execute("SELECT t.startnr, t.vorname, t.nachname, v.name AS verein FROM teilnehmer t "
+                   "LEFT JOIN verein v ON v.id=t.verein_id WHERE t.id=?", (tid,)).fetchone()
+    if not t:
+        return ""
+    name = " ".join(x for x in (t["nachname"], t["vorname"]) if x)
+    return ", ".join(x for x in (f"Nr. {t['startnr']} {name}".strip(), t["verein"]) if x)
+
+
+def _teilnehmer_aenderungen_loggen(db, alt, neu_felder):
+    """Jede geänderte Angabe einer Anmeldung einzeln ins Protokoll (Verein/Kategorie mit Namen)."""
+    def anzeige(feld, wert):
+        if wert in (None, ""):
+            return ""
+        if feld == "verein_id":
+            r = db.execute("SELECT name FROM verein WHERE id=?", (wert,)).fetchone()
+            return r["name"] if r else str(wert)
+        if feld == "kategorie_id":
+            r = db.execute("SELECT bezeichnung FROM kategorie WHERE id=?", (wert,)).fetchone()
+            return r["bezeichnung"] if r else str(wert)
+        return str(wert)
+    kid = neu_felder[6] or alt["kategorie_id"]
+    for feld, neu in zip(TN_FELDER, neu_felder):
+        a, n = anzeige(feld, alt[feld]), anzeige(feld, neu)
+        if a != n:
+            _log(db, "vermerk" if feld == "status" else "teilnehmer", alt["id"], kid, TN_FELD_NAMEN[feld], a, n)
 
 
 def _teilnehmer_form_seite(db, tn, pruefung):
@@ -776,10 +959,11 @@ def _teilnehmer_form_seite(db, tn, pruefung):
 @app.route("/teilnehmer/<int:tid>/loeschen", methods=["POST"])
 @chef_required
 def teilnehmer_loeschen(tid):
+    _log(g.db, "loeschen", tid, None, "Teilnehmer", _tn_bezeichnung(g.db, tid), "gelöscht")
     g.db.execute("DELETE FROM teilnehmer WHERE id=?", (tid,))
     g.db.commit()
     flash("Teilnehmer gelöscht.", "ok")
-    return redirect(request.form.get("next") or url_for("teilnehmer"))
+    return redirect(_sicheres_ziel(request.form.get("next"), url_for("teilnehmer")))
 
 
 @app.route("/teilnehmer/sammelaktion", methods=["POST"])
@@ -789,28 +973,45 @@ def teilnehmer_sammelaktion():
     db = g.db
     ids = request.form.getlist("sel", type=int)
     aktion = request.form.get("sammel_aktion", "")
-    ziel = request.form.get("next") or url_for("teilnehmer")
-    if not ids:
+    ziel = _sicheres_ziel(request.form.get("next"), url_for("teilnehmer"))
+    if ids and g.wettkampf:
+        # nur Anmeldungen des aktiven Anlasses
+        zeilen = db.execute(f"SELECT t.*, k.rl_fertig, k.abgeschlossen_am, k.bezeichnung FROM teilnehmer t "
+                            f"LEFT JOIN kategorie k ON k.id=t.kategorie_id WHERE t.id IN ({','.join('?' * len(ids))}) "
+                            "AND t.wettkampf_id=?", [*ids, g.wettkampf["id"]]).fetchall()
+    else:
+        zeilen = []
+    if not zeilen:
         flash("Keine Zeilen ausgewählt.", "error")
         return redirect(ziel)
+    gesperrt = [z for z in zeilen if z["kategorie_id"] and _gesperrt(z)]
+    if gesperrt and aktion in ("abmelden", "status"):
+        flash(f"{len(gesperrt)} Zeile(n) übersprungen: Disziplin abgeschlossen bzw. Rangliste freigegeben – "
+              "Änderungen nur durch den Chef.", "error")
+        zeilen = [z for z in zeilen if z not in gesperrt]
+    ids = [z["id"] for z in zeilen]
     marks = ",".join("?" * len(ids))
+    if not ids:
+        return redirect(ziel)
     if aktion == "loeschen":
         # Löschen nur Chef/Superuser – Eingeber melden ab (bleibt nachvollziehbar, zählt zur Preisbasis)
         if not _ist_chef():
             flash("Löschen kann nur der Chef – Teilnehmende bitte auf „Abgemeldet“ setzen.", "error")
             return redirect(ziel)
-        db.execute(f"DELETE FROM teilnehmer WHERE id IN ({marks})", ids)
         for tid in ids:
-            _log(db, "loeschen", tid, None, "Teilnehmer", "vorhanden", "gelöscht")
+            _log(db, "loeschen", tid, None, "Teilnehmer", _tn_bezeichnung(db, tid), "gelöscht")
+        db.execute(f"DELETE FROM teilnehmer WHERE id IN ({marks})", ids)
         flash(f"{len(ids)} Anmeldung(en) gelöscht.", "ok")
     elif aktion == "abmelden":
         db.execute(f"UPDATE teilnehmer SET status='abgem' WHERE id IN ({marks})", ids)
-        for tid in ids:
-            _log(db, "vermerk", tid, None, "Vermerk", "", "abgem")
+        for z in zeilen:
+            _log(db, "vermerk", z["id"], z["kategorie_id"], "Vermerk", z["status"] or "", "abgem")
         flash(f"{len(ids)} Anmeldung(en) abgemeldet.", "ok")
     elif aktion == "status":
         st = request.form.get("status", "").strip() or None
         db.execute(f"UPDATE teilnehmer SET status=? WHERE id IN ({marks})", [st, *ids])
+        for z in zeilen:
+            _log(db, "vermerk", z["id"], z["kategorie_id"], "Vermerk", z["status"] or "", st or "")
         flash(f"Status für {len(ids)} Zeile(n) gesetzt.", "ok")
     db.commit()
     return redirect(ziel)
@@ -890,8 +1091,17 @@ def _jetzt():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+# Aktionen, die das Resultat einer Gruppe verändern: danach gilt die Vier-Augen-Kontrolle
+# nicht mehr, und eine schon gedruckte Rangliste ist nicht mehr aktuell.
+WERTUNG_AKTIONEN = {"resultat", "stafette", "vermerk", "korrektur"}
+
+
 def _log(db, aktion, teilnehmer_id, kategorie_id, feld, alt, neu):
-    """Schreibt einen Eintrag ins Änderungs-/Audit-Log."""
+    """Schreibt einen Eintrag ins Änderungs-/Audit-Log.
+
+    Bei geänderten Resultaten/Vermerken wird die Kontrolle der Gruppe zurückgesetzt und die
+    Rangliste der Kategorie wieder als „nicht gedruckt“ geführt.
+    """
     if str(alt or "") == str(neu or ""):
         return
     db.execute(
@@ -899,6 +1109,38 @@ def _log(db, aktion, teilnehmer_id, kategorie_id, feld, alt, neu):
         "VALUES(?,?,?,?,?,?,?,?)",
         (_jetzt(), session.get("kennung", ""), aktion, teilnehmer_id, kategorie_id,
          feld, None if alt is None else str(alt), None if neu is None else str(neu)))
+    if aktion in WERTUNG_AKTIONEN:
+        if teilnehmer_id and aktion != "korrektur":
+            db.execute("UPDATE teilnehmer SET kontrolliert_von=NULL, kontrolliert_am=NULL WHERE id=?",
+                       (teilnehmer_id,))
+        if kategorie_id is None and teilnehmer_id:
+            row = db.execute("SELECT kategorie_id FROM teilnehmer WHERE id=?", (teilnehmer_id,)).fetchone()
+            kategorie_id = row["kategorie_id"] if row else None
+        if kategorie_id:
+            db.execute("UPDATE kategorie SET rl_gedruckt=0 WHERE id=? AND rl_gedruckt=1", (kategorie_id,))
+
+
+def _gesperrt(kat):
+    """Grund, warum Eingeber die Resultate dieser Kategorie nicht mehr ändern dürfen – sonst None.
+
+    Nach „Disziplin abschliessen“ bzw. der WKL-Freigabe der Rangliste kann nur noch der Chef ändern.
+    """
+    if not kat or _ist_chef():
+        return None
+    if kat["rl_fertig"]:
+        return f"„{kat['bezeichnung']}“: Die Rangliste ist freigegeben – Änderungen nur noch durch den Chef."
+    if kat["abgeschlossen_am"]:
+        return f"„{kat['bezeichnung']}“: Die Disziplin ist abgeschlossen – Änderungen nur noch durch den Chef."
+    return None
+
+
+def _wert_txt(r):
+    """Anzeige eines gespeicherten Resultats wie im Eingabefeld (DNS/DNF bzw. 2 Dezimalen)."""
+    if r is None:
+        return ""
+    if r["status"] in ("dns", "dnf"):
+        return r["status"].upper()
+    return f"{r['note']:.2f}" if r["note"] is not None else ""
 
 
 def _speichere_resultate(db, teilnehmer_id, positionen, form):
@@ -908,25 +1150,49 @@ def _speichere_resultate(db, teilnehmer_id, positionen, form):
     gewertet, sondern der Mitglieder-Status gespeichert (zählt nicht im
     Durchschnitt; die Gruppe wird in der Rangliste als a.K. geführt).
     Schreibt erfasst_von/erfasst_am und protokolliert Änderungen.
+
+    Mehrplatzbetrieb: Zu jedem Feld schickt das Formular den Wert beim Öffnen der Seite mit
+    (orig_note_…). Unveränderte Felder werden nicht gespeichert – so überschreibt ein länger
+    offenes Raster keine Werte, die inzwischen jemand anders erfasst hat. Hat jemand anders den
+    Wert geändert und man selbst auch, wird nicht überschrieben, sondern ein Konflikt gemeldet.
+    Fehlt ein Feld im Formular (z. B. Nachmeldung nach dem Öffnen), bleibt der Wert unverändert.
+
+    Liefert (fehler, warnungen) als Listen von Meldungen.
     """
     kennung, jetzt = session.get("kennung", ""), _jetzt()
-    alt_map = {r["position"]: (r["status"].upper() if r["status"] else
-                               (f"{r['note']:.2f}" if r["note"] is not None else ""))
-               for r in db.execute(
-                   "SELECT position, note, status FROM resultat WHERE teilnehmer_id=?",
-                   (teilnehmer_id,)).fetchall()}
-    kid = db.execute("SELECT kategorie_id FROM teilnehmer WHERE id=?", (teilnehmer_id,)).fetchone()
-    kid = kid["kategorie_id"] if kid else None
+    fehler, warnungen = [], []
+    alt_map = {r["position"]: _wert_txt(r) for r in db.execute(
+        "SELECT position, note, status FROM resultat WHERE teilnehmer_id=?", (teilnehmer_id,)).fetchall()}
+    t = db.execute("SELECT t.startnr, k.* FROM teilnehmer t LEFT JOIN kategorie k ON k.id=t.kategorie_id "
+                   "WHERE t.id=?", (teilnehmer_id,)).fetchone()
+    kid = t["id"] if t else None
+    nr = f"Nr. {t['startnr']}" if t else "?"
+    wmin = t["warn_min"] if t else None
+    wmax = t["warn_max"] if t else None
     for p in positionen:
-        raw = (form.get(f"note_{teilnehmer_id}_{p}", "") or "").strip()
+        feld = f"note_{teilnehmer_id}_{p}"
+        if feld not in form:
+            continue
+        raw = (form.get(feld, "") or "").strip()
         alt = alt_map.get(p, "")
+        if f"orig_{feld}" in form:
+            orig = (form.get(f"orig_{feld}") or "").strip()
+            if raw == orig:
+                continue                                    # nicht angefasst
+            if alt != orig:
+                fehler.append(f"{nr}, Wert {p}: inzwischen von anderer Stelle auf „{alt or 'leer'}“ geändert – "
+                              f"„{raw or 'leer'}“ nicht gespeichert. Bitte prüfen und nochmals eingeben.")
+                continue
         if raw == "":
-            db.execute("DELETE FROM resultat WHERE teilnehmer_id=? AND position=?",
-                       (teilnehmer_id, p))
-            _log(db, "resultat", teilnehmer_id, kid, f"Wert {p}", alt, "")
+            if alt:
+                db.execute("DELETE FROM resultat WHERE teilnehmer_id=? AND position=?",
+                           (teilnehmer_id, p))
+                _log(db, "resultat", teilnehmer_id, kid, f"Wert {p}", alt, "")
             continue
         low = raw.lower()
         if low in ("dns", "dnf"):
+            if alt == low.upper():
+                continue
             db.execute(
                 "INSERT INTO resultat(teilnehmer_id, position, note, status, erfasst_von, erfasst_am) "
                 "VALUES(?,?,NULL,?,?,?) ON CONFLICT(teilnehmer_id, position) DO UPDATE SET "
@@ -937,33 +1203,75 @@ def _speichere_resultate(db, teilnehmer_id, positionen, form):
         try:
             wert = round(float(raw.replace(",", ".")), 2)
         except ValueError:
+            fehler.append(f"{nr}, Wert {p}: „{raw}“ ist keine Zahl (erlaubt: Zahl, DNS, DNF) – nicht gespeichert.")
             continue
+        if alt == f"{wert:.2f}":
+            continue
+        if (wmin is not None and wert < wmin) or (wmax is not None and wert > wmax):
+            grenzen = " – ".join(f"{x:g}" for x in (wmin, wmax) if x is not None)
+            warnungen.append(f"{nr}, Wert {p}: {wert:g} liegt ausserhalb der Plausibilität ({grenzen}) – "
+                             "gespeichert, bitte prüfen.")
         db.execute(
             "INSERT INTO resultat(teilnehmer_id, position, note, status, erfasst_von, erfasst_am) "
             "VALUES(?,?,?,NULL,?,?) ON CONFLICT(teilnehmer_id, position) DO UPDATE SET "
             "note=excluded.note, status=NULL, erfasst_von=excluded.erfasst_von, erfasst_am=excluded.erfasst_am",
             (teilnehmer_id, p, wert, kennung, jetzt))
         _log(db, "resultat", teilnehmer_id, kid, f"Wert {p}", alt, f"{wert:.2f}")
+    return fehler, warnungen
+
+
+def _meldungen(fehler, warnungen):
+    for m in fehler:
+        flash(m, "error")
+    for m in warnungen:
+        flash(m, "error")
 
 
 def _speichere_stafette(db, tid, runde, form, prefix):
-    """Speichert eine Stafetten-Runde (Rohzeit + 2 Übergabefehler-Felder)."""
+    """Speichert eine Stafetten-Runde (Rohzeit + 2 Übergabefehler-Felder).
+
+    Liefert eine Liste von Fehlermeldungen (ungültige Zeit, Konflikt mit anderer Eingabe).
+    """
+    if f"{prefix}_zeit" not in form:
+        return []
     kennung, jetzt = session.get("kennung", ""), _jetzt()
-    roh = scoring.parse_zeit(form.get(f"{prefix}_zeit", ""))
-    fa = form.get(f"{prefix}_fa", type=int) or 0
-    fb = form.get(f"{prefix}_fb", type=int) or 0
-    kid = db.execute("SELECT kategorie_id FROM teilnehmer WHERE id=?", (tid,)).fetchone()
-    kid = kid["kategorie_id"] if kid else None
+    roh_txt = (form.get(f"{prefix}_zeit", "") or "").strip()
+    roh = scoring.parse_zeit(roh_txt)
+    t = db.execute("SELECT startnr, kategorie_id FROM teilnehmer WHERE id=?", (tid,)).fetchone()
+    kid = t["kategorie_id"] if t else None
+    nr = f"Nr. {t['startnr']}" if t else "?"
+    if roh_txt and roh is None:
+        return [f"{nr} {runde}: „{roh_txt}“ ist keine gültige Zeit (z. B. 52.86 oder 1:52.86) – nicht gespeichert."]
+    try:
+        fa = max(0, int(form.get(f"{prefix}_fa") or 0))
+        fb = max(0, int(form.get(f"{prefix}_fb") or 0))
+    except ValueError:
+        return [f"{nr} {runde}: Übergabefehler müssen ganze Zahlen sein – nicht gespeichert."]
+    alt = db.execute("SELECT rohzeit, fehler_a, fehler_b FROM stafette WHERE teilnehmer_id=? AND runde=?",
+                     (tid, runde)).fetchone()
+    alt_zeit = scoring.fmt_zeit(alt["rohzeit"]) if alt and alt["rohzeit"] is not None else ""
+    alt_fa, alt_fb = (alt["fehler_a"] or 0, alt["fehler_b"] or 0) if alt else (0, 0)
+    orig = form.get(f"orig_{prefix}_zeit")
+    if orig is not None and orig.strip() != alt_zeit:
+        if roh_txt != orig.strip():
+            return [f"{nr} {runde}: inzwischen von anderer Stelle auf „{alt_zeit or 'leer'}“ geändert – "
+                    "nicht gespeichert. Bitte prüfen und nochmals eingeben."]
+        roh = alt["rohzeit"] if alt else None          # Zeit nicht angefasst: die neuere behalten
+    neu_zeit = scoring.fmt_zeit(roh) if roh is not None else ""
+    if (neu_zeit, fa, fb) == (alt_zeit, alt_fa, alt_fb):
+        return []
     if roh is None and not fa and not fb:
         db.execute("DELETE FROM stafette WHERE teilnehmer_id=? AND runde=?", (tid, runde))
-        return
-    db.execute(
-        "INSERT INTO stafette(teilnehmer_id, runde, rohzeit, fehler_a, fehler_b, erfasst_von, erfasst_am) "
-        "VALUES(?,?,?,?,?,?,?) ON CONFLICT(teilnehmer_id, runde) DO UPDATE SET "
-        "rohzeit=excluded.rohzeit, fehler_a=excluded.fehler_a, fehler_b=excluded.fehler_b, "
-        "erfasst_von=excluded.erfasst_von, erfasst_am=excluded.erfasst_am",
-        (tid, runde, roh, fa, fb, kennung, jetzt))
-    _log(db, "stafette", tid, kid, f"{runde} Zeit", "", scoring.fmt_zeit(roh) if roh else "")
+    else:
+        db.execute(
+            "INSERT INTO stafette(teilnehmer_id, runde, rohzeit, fehler_a, fehler_b, erfasst_von, erfasst_am) "
+            "VALUES(?,?,?,?,?,?,?) ON CONFLICT(teilnehmer_id, runde) DO UPDATE SET "
+            "rohzeit=excluded.rohzeit, fehler_a=excluded.fehler_a, fehler_b=excluded.fehler_b, "
+            "erfasst_von=excluded.erfasst_von, erfasst_am=excluded.erfasst_am",
+            (tid, runde, roh, fa, fb, kennung, jetzt))
+    _log(db, "stafette", tid, kid, f"{runde} Zeit", alt_zeit, neu_zeit)
+    _log(db, "stafette", tid, kid, f"{runde} Fehler", f"{alt_fa}/{alt_fb}", f"{fa}/{fb}")
+    return []
 
 
 @app.route("/schnellerfassung", methods=["GET", "POST"])
@@ -983,17 +1291,28 @@ def schnellerfassung():
         t = db.execute("SELECT * FROM teilnehmer WHERE id=? AND wettkampf_id=?", (tid, wk_id)).fetchone()
         if t:
             kat = db.execute("SELECT * FROM kategorie WHERE id=?", (t["kategorie_id"],)).fetchone()
+            sperre = _gesperrt(kat)
+            if sperre:
+                flash(sperre, "error")
+                return redirect(url_for("schnellerfassung", nr=t["startnr"]))
+            fehler, warnungen = [], []
             if kat and ("ist_stafette" in kat.keys() and kat["ist_stafette"]):
                 if kat["hat_final"]:
-                    _speichere_stafette(db, tid, "vorlauf", request.form, "vorlauf")
-                _speichere_stafette(db, tid, "final", request.form, "final")
+                    fehler += _speichere_stafette(db, tid, "vorlauf", request.form, "vorlauf")
+                fehler += _speichere_stafette(db, tid, "final", request.form, "final")
             else:
                 positionen = _kat_positionen(db, kat)[0] if kat else []
-                _speichere_resultate(db, tid, positionen, request.form)
-            status = request.form.get("status", "").strip()
-            db.execute("UPDATE teilnehmer SET status=?, bemerkung=? WHERE id=?",
-                       (status or None, request.form.get("bemerkung", "").strip() or None, tid))
+                fehler, warnungen = _speichere_resultate(db, tid, positionen, request.form)
+            status = request.form.get("status", "").strip() or None
+            bemerkung = request.form.get("bemerkung", "").strip() or None
+            if (status, bemerkung) != (t["status"] or None, t["bemerkung"] or None):
+                db.execute("UPDATE teilnehmer SET status=?, bemerkung=? WHERE id=?", (status, bemerkung, tid))
+                _log(db, "vermerk", tid, t["kategorie_id"], "Vermerk", t["status"] or "", status or "")
+                _log(db, "teilnehmer", tid, t["kategorie_id"], "Bemerkung", t["bemerkung"] or "", bemerkung or "")
             db.commit()
+            _meldungen(fehler, warnungen)
+            if fehler:
+                return redirect(url_for("schnellerfassung", nr=t["startnr"]))
             # Score für Rückmeldung berechnen
             noten = [r["note"] for r in db.execute(
                 "SELECT note FROM resultat WHERE teilnehmer_id=? ORDER BY position", (tid,)).fetchall()]
@@ -1036,6 +1355,7 @@ def schnellerfassung():
                            "zuschlag_a_label": kat["zuschlag_a_label"] or "Fehler A",
                            "zuschlag_b_label": kat["zuschlag_b_label"] or "Fehler B",
                            "vorlauf": runden.get("vorlauf"), "final": runden.get("final"),
+                           "gesperrt": _gesperrt(kat),
                            "wk_name": t["wk_name"] if "wk_name" in t.keys() else "",
                            "positionen": [], "einheit": "s"}
             else:
@@ -1053,6 +1373,7 @@ def schnellerfassung():
                            "positionen": positionen, "diszs": diszs,
                            "disz_bez": disz_bez, "einheit": einheit, "berechnung": berechnung,
                            "richtung": richtung, "anzahl_werte": anzahl_werte, "werte": werte,
+                           "gesperrt": _gesperrt(kat),
                            "wk_name": t["wk_name"] if "wk_name" in t.keys() else ""}
         else:
             nicht_gefunden = True
@@ -1086,10 +1407,19 @@ def erfassung(kid):
         "ORDER BY t.startnr", (kid,)).fetchall()
 
     if request.method == "POST":
+        sperre = _gesperrt(kat)
+        if sperre:
+            flash(sperre, "error")
+            return redirect(url_for("erfassung", kid=kid))
+        fehler, warnungen = [], []
         for t in teilnehmende:
-            _speichere_resultate(db, t["id"], positionen, request.form)
+            f, w = _speichere_resultate(db, t["id"], positionen, request.form)
+            fehler += f
+            warnungen += w
         db.commit()
-        flash("Resultate gespeichert.", "ok")
+        _meldungen(fehler, warnungen)
+        flash("Resultate gespeichert." if not fehler else
+              "Übrige Resultate gespeichert – die oben genannten Werte bitte korrigieren.", "ok")
         return redirect(url_for("erfassung", kid=kid))
 
     werte = {}
@@ -1103,7 +1433,7 @@ def erfassung(kid):
     return render_template("erfassung.html", kat=kat, diszs=diszs, positionen=positionen,
                            teilnehmende=teilnehmende, werte=werte, streich=kat["streich"],
                            berechnung=berechnung, richtung=richtung, einheit=einheit,
-                           disz_bez=disz_bez, anzahl_werte=anzahl_werte)
+                           disz_bez=disz_bez, anzahl_werte=anzahl_werte, gesperrt=_gesperrt(kat))
 
 
 # --------------------------------------------------------------------------- #
@@ -1211,7 +1541,8 @@ def rangliste_korrigieren(kid):
     if not kat:
         abort(404)
     if request.method == "POST":
-        for t in db.execute("SELECT id FROM teilnehmer WHERE kategorie_id=?", (kid,)).fetchall():
+        for t in db.execute("SELECT id, rang_manuell, total_manuell, status FROM teilnehmer WHERE kategorie_id=?",
+                            (kid,)).fetchall():
             tid = t["id"]
             rang = request.form.get(f"rang_{tid}", "").strip()
             total = request.form.get(f"total_{tid}", "").strip().replace(",", ".")
@@ -1221,10 +1552,15 @@ def rangliste_korrigieren(kid):
                 total_v = round(float(total), 2) if total else None
             except ValueError:
                 total_v = None
+            if (rang_v, total_v, status) == (t["rang_manuell"], t["total_manuell"], t["status"] or None):
+                continue
             db.execute("UPDATE teilnehmer SET rang_manuell=?, total_manuell=?, status=? WHERE id=?",
                        (rang_v, total_v, status, tid))
             _log(db, "korrektur", tid, kid, "rang/total/status",
-                 "", f"rang={rang_v} total={total_v} status={status or '-'}")
+                 f"rang={t['rang_manuell']} total={t['total_manuell']} status={t['status'] or '-'}",
+                 f"rang={rang_v} total={total_v} status={status or '-'}")
+            if status != (t["status"] or None):
+                db.execute("UPDATE teilnehmer SET kontrolliert_von=NULL, kontrolliert_am=NULL WHERE id=?", (tid,))
         db.commit()
         flash("Korrekturen gespeichert.", "ok")
         return redirect(url_for("rangliste", kid=kid))
@@ -1578,8 +1914,14 @@ def export_rangliste_csv(kid):
 @app.route("/backup")
 @chef_required
 def backup():
-    """Ganze Datenbank herunterladen (entspricht Export auf USB im Original)."""
-    return send_file(DB_PATH, as_attachment=True, download_name="debra_backup.sqlite3")
+    """Ganze Datenbank herunterladen (entspricht Export auf USB im Original).
+
+    Über die SQLite-Sicherungsfunktion, damit auch die neuesten Eingaben aus der WAL-Datei
+    enthalten sind (eine reine Dateikopie kann sie verlieren)."""
+    from datetime import datetime
+    name = "debra_backup_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".sqlite3"
+    return send_file(io.BytesIO(sicherung.als_bytes()), as_attachment=True, download_name=name,
+                     mimetype="application/vnd.sqlite3")
 
 
 # --------------------------------------------------------------------------- #
@@ -1718,7 +2060,11 @@ def einstellungen():
     start = _art(db, g.wettkampf) or "allgemein"
     return render_template("einstellungen.html", liste=anlaesse, modi=KRANZ_MODI, vorjahr_n=vorjahr_n,
                            vorjahr_jtsst_n=vorjahr_jtsst_n,
-                           db_pfad=DB_PATH, start=start)
+                           db_pfad=DB_PATH, start=start,
+                           chef_gesetzt=bool(get_setting("chef_passwort")),
+                           pin_gesetzt=bool(get_setting("eingeber_pin")),
+                           auto_sicherung=sicherung.intervall_minuten(),
+                           sicherungs_ordner=sicherung.ordner())
 
 
 @app.route("/einstellungen/<art>", methods=["GET", "POST"])
@@ -1881,14 +2227,29 @@ def kontrollblatt():
     db = g.db
     if request.method == "POST" and request.form.get("aktion") == "quittieren":
         ids = request.form.getlist("sel", type=int)
+        ich = session.get("kennung", "")
         if ids:
             marks = ",".join("?" * len(ids))
+            # nur Gruppen des aktiven Anlasses
+            ids = [r["id"] for r in db.execute(
+                f"SELECT id FROM teilnehmer WHERE id IN ({marks}) AND wettkampf_id=?",
+                [*ids, g.wettkampf["id"] if g.wettkampf else 0]).fetchall()]
+        # Vier-Augen-Prinzip: wer einen Wert selbst erfasst hat, darf diese Gruppe nicht quittieren
+        eigene = {r["teilnehmer_id"] for r in db.execute(
+            f"SELECT DISTINCT teilnehmer_id FROM resultat WHERE teilnehmer_id IN ({','.join('?' * len(ids))}) "
+            "AND LOWER(TRIM(erfasst_von))=LOWER(TRIM(?))", [*ids, ich]).fetchall()} if ids else set()
+        erlaubt = [tid for tid in ids if tid not in eigene]
+        if erlaubt:
+            marks = ",".join("?" * len(erlaubt))
             db.execute(f"UPDATE teilnehmer SET kontrolliert_von=?, kontrolliert_am=? "
-                       f"WHERE id IN ({marks})", [session.get("kennung", ""), _jetzt(), *ids])
-            for tid in ids:
-                _log(db, "kontrolle", tid, None, "kontrolliert", "", session.get("kennung", ""))
+                       f"WHERE id IN ({marks})", [ich, _jetzt(), *erlaubt])
+            for tid in erlaubt:
+                _log(db, "kontrolle", tid, None, "kontrolliert", "", ich)
             db.commit()
-            flash(f"{len(ids)} Gruppe(n) als kontrolliert markiert.", "ok")
+            flash(f"{len(erlaubt)} Gruppe(n) als kontrolliert markiert.", "ok")
+        if eigene:
+            flash(f"{len(eigene)} Gruppe(n) nicht quittiert: Die Werte wurden unter der eigenen Kennung „{ich}“ "
+                  "erfasst. Die Kontrolle muss eine andere Person mit eigener Kennung machen.", "error")
         return redirect(url_for("kontrollblatt", kennung=request.form.get("kennung", ""),
                                 kat=request.form.get("kat", ""), offen=request.form.get("offen", "")))
 
@@ -1928,12 +2289,10 @@ def kontrollblatt():
 
 
 @app.route("/kontrollblatt/backup")
-@login_required
+@chef_required
 def kontrollblatt_backup():
-    """Lokale Sicherung der Datenbank (wird beim Kontrollblatt-Druck ausgelöst)."""
-    from datetime import datetime
-    name = "debra_backup_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".sqlite3"
-    return send_file(DB_PATH, as_attachment=True, download_name=name)
+    """Lokale Sicherung der Datenbank (Kontrollblatt, nur Chef: enthält alle Personendaten)."""
+    return backup()
 
 
 # --------------------------------------------------------------------------- #
@@ -2152,18 +2511,26 @@ def stafette_verwalten(kid):
     teams = _stafette_teams(db, kid)
 
     if request.method == "POST":
+        fehler = []
         for t in teams:
             if kat["hat_final"]:
-                _speichere_stafette(db, t["id"], "vorlauf", request.form, f"v_{t['id']}")
-                _speichere_stafette(db, t["id"], "final", request.form, f"f_{t['id']}")
-                gr = request.form.get(f"sel_{t['id']}", "").strip() or None
-                db.execute("UPDATE teilnehmer SET final_gruppe=? WHERE id=?", (gr, t["id"]))
+                fehler += _speichere_stafette(db, t["id"], "vorlauf", request.form, f"v_{t['id']}")
+                fehler += _speichere_stafette(db, t["id"], "final", request.form, f"f_{t['id']}")
+                if f"sel_{t['id']}" in request.form:
+                    gr = request.form.get(f"sel_{t['id']}", "").strip() or None
+                    if gr != (t["final_gruppe"] or None):
+                        db.execute("UPDATE teilnehmer SET final_gruppe=? WHERE id=?", (gr, t["id"]))
+                        _log(db, "teilnehmer", t["id"], kid, "Final-Selektion", t["final_gruppe"] or "", gr or "")
             else:
-                _speichere_stafette(db, t["id"], "final", request.form, f"f_{t['id']}")
-            st = request.form.get(f"status_{t['id']}", "").strip() or None
-            db.execute("UPDATE teilnehmer SET status=? WHERE id=?", (st, t["id"]))
+                fehler += _speichere_stafette(db, t["id"], "final", request.form, f"f_{t['id']}")
+            if f"status_{t['id']}" in request.form:
+                st = request.form.get(f"status_{t['id']}", "").strip() or None
+                if st != (t["status"] or None):
+                    db.execute("UPDATE teilnehmer SET status=? WHERE id=?", (st, t["id"]))
+                    _log(db, "vermerk", t["id"], kid, "Vermerk", t["status"] or "", st or "")
         db.commit()
-        flash("Stafetten-Daten gespeichert.", "ok")
+        _meldungen(fehler, [])
+        flash("Stafetten-Daten gespeichert." if not fehler else "Übrige Stafetten-Daten gespeichert.", "ok")
         return redirect(url_for("stafette_verwalten", kid=kid))
 
     # Einträge mit berechneten Endzeiten aufbereiten
@@ -2453,7 +2820,14 @@ def seilziehen_eingabe(kid):
                                ausz=_sz_auszeichnungen(db, kid) if raenge else None)
 
     if request.method == "POST":
+        sperre = _gesperrt(kat)
+        if sperre:
+            flash(sperre, "error")
+            return redirect(url_for("seilziehen_eingabe", kid=kid))
         if request.form.get("aktion") == "leeren":
+            if not _ist_chef():
+                flash("Die ganze Seilziehen-Eingabe löschen kann nur der Chef.", "error")
+                return redirect(url_for("seilziehen_eingabe", kid=kid))
             for t in teams:
                 db.execute("UPDATE teilnehmer SET sz_runde=NULL WHERE id=?", (t["id"],))
                 db.execute("DELETE FROM resultat WHERE teilnehmer_id=? AND position=1", (t["id"],))
@@ -2482,11 +2856,17 @@ def seilziehen_eingabe(kid):
             _log(db, "resultat", tid, kid, "Seilziehen",
                  f"{alt['note']:.2f}" if alt and alt["note"] is not None else "", f"{float(rang):.2f}")
         # Auszeichnung nach ganzen Runden statt genau nach Platzierung (Anteil bleibt erhalten)
-        wert = kat["kranz_wert"] if kat["kranz_modus"] in ("prozent", "finalrunde") and kat["kranz_wert"] else 30
-        db.execute("UPDATE kategorie SET kranz_modus='finalrunde', kranz_wert=? WHERE id=?", (wert, kid))
+        # Nur „Beste X %“ wird auf ganze Runden umgestellt; eine bewusst gewählte andere Regel
+        # (Bis Rang X, Ab Schwelle, Keine) bleibt unverändert.
+        if kat["kranz_modus"] in ("prozent", "finalrunde"):
+            wert = kat["kranz_wert"] or 30
+            db.execute("UPDATE kategorie SET kranz_modus='finalrunde', kranz_wert=? WHERE id=?", (wert, kid))
+        else:
+            wert = None
         db.commit()
         flash(f"Seilziehen gespeichert: {len(wertbar)} Gruppen rangiert, "
-              f"{_sz_auszeichnungen(db, kid)} Auszeichnungen (ganze Runden, höchstens {wert:g} %).", "ok")
+              f"{_sz_auszeichnungen(db, kid)} Auszeichnungen"
+              + (f" (ganze Runden, höchstens {wert:g} %)." if wert is not None else "."), "ok")
         for h in sz.hinweise(runden):
             flash(h, "error")
         return redirect(url_for("seilziehen_eingabe", kid=kid))
@@ -2917,7 +3297,20 @@ def jet_erfassung():
         um = jet.Umrechner(db)
         kennung, jetzt = session.get("kennung", ""), _jetzt()
         n_neu, fehler = 0, []
+        def wert_txt(abk, w):
+            # wie in der Anzeige (Zeiten als m:ss.ss), damit der Vergleich mit orig_… stimmt
+            if w is None:
+                return ""
+            return scoring.fmt_zeit(w) if jet.DISZIPLINEN[abk][2] == "s" else f"{w:g}"
+
+        gesperrte = set()
         for t in teilnehmende:
+            sperre = _gesperrt(kat_map[t["kategorie_id"]])
+            if sperre:
+                if any(f"w_{t['id']}_{a}" in request.form and (request.form.get(f"w_{t['id']}_{a}") or "").strip()
+                       != (request.form.get(f"orig_w_{t['id']}_{a}") or "").strip() for a in spalten):
+                    gesperrte.add(sperre)
+                continue
             kat_bst = jet.kat_buchstabe(kat_map[t["kategorie_id"]])
             alt = {r["position"]: r for r in db.execute(
                 "SELECT position, wert, note FROM resultat WHERE teilnehmer_id=?", (t["id"],)).fetchall()}
@@ -2927,7 +3320,15 @@ def jet_erfassung():
                     continue
                 roh = (request.form.get(feld) or "").strip()
                 p = pos_von[abk]
-                alt_txt = "" if p not in alt or alt[p]["wert"] is None else f"{alt[p]['wert']:g}"
+                alt_txt = wert_txt(abk, alt[p]["wert"]) if p in alt else ""
+                if f"orig_{feld}" in request.form:
+                    orig = (request.form.get(f"orig_{feld}") or "").strip()
+                    if roh == orig:
+                        continue                            # nicht angefasst
+                    if alt_txt != orig:
+                        fehler.append(f"Nr. {t['startnr']} {abk}: inzwischen von anderer Stelle auf "
+                                      f"„{alt_txt or 'leer'}“ geändert – „{roh or 'leer'}“ nicht gespeichert.")
+                        continue
                 if roh == "":
                     if p in alt:
                         db.execute("DELETE FROM resultat WHERE teilnehmer_id=? AND position=?", (t["id"], p))
@@ -2951,15 +3352,15 @@ def jet_erfassung():
                     "VALUES(?,?,?,?,NULL,?,?) ON CONFLICT(teilnehmer_id, position) DO UPDATE SET "
                     "wert=excluded.wert, note=excluded.note, status=NULL, erfasst_von=excluded.erfasst_von, "
                     "erfasst_am=excluded.erfasst_am", (t["id"], p, wert, note, kennung, jetzt))
-                _log(db, "resultat", t["id"], t["kategorie_id"], abk, alt_txt, f"{wert:g}")
+                _log(db, "resultat", t["id"], t["kategorie_id"], abk, alt_txt, wert_txt(abk, wert))
                 n_neu += 1
-            if f"st_{t['id']}" in request.form:
+            if f"st_{t['id']}" in request.form and not _gesperrt(kat_map[t["kategorie_id"]]):
                 status = request.form.get(f"st_{t['id']}", "").strip() or None
                 if status != (t["status"] or None):
                     db.execute("UPDATE teilnehmer SET status=? WHERE id=?", (status, t["id"]))
                     _log(db, "vermerk", t["id"], t["kategorie_id"], "Vermerk", t["status"] or "", status or "")
         db.commit()
-        for f in fehler:
+        for f in sorted(gesperrte) + fehler:
             flash(f, "error")
         if len(teilnehmende) == 1:
             t = teilnehmende[0]

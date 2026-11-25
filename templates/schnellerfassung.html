@@ -51,6 +51,8 @@
             <div class="grid-2" style="margin-top:8px;">
               <div><label>Zeit <span class="hint">(s oder m:ss.ss)</span></label>
                 <input type="text" inputmode="decimal" name="{{ prefix }}_zeit"
+                       value="{{ fmt_zeit(row['rohzeit']) if row and row['rohzeit'] is not none else '' }}">
+                <input type="hidden" name="orig_{{ prefix }}_zeit"
                        value="{{ fmt_zeit(row['rohzeit']) if row and row['rohzeit'] is not none else '' }}"></div>
               <div class="grid-2">
                 <div><label>{{ eintrag.zuschlag_a_label }}</label>
@@ -76,13 +78,15 @@
             <input type="text" inputmode="decimal" class="val-in" data-idx="{{ loop.index0 }}"
                    name="note_{{ t.id }}_{{ p }}"
                    value="{{ eintrag.werte[p] if p in eintrag.werte else '' }}">
+            <input type="hidden" name="orig_note_{{ t.id }}_{{ p }}" value="{{ eintrag.werte[p] if p in eintrag.werte else '' }}">
           </div>
         {% endfor %}
       </div>
       {% endif %}
 
       <div class="savebar" style="margin-top:14px;">
-        <button class="btn primary" type="submit">Speichern &amp; nächste Startnummer</button>
+        {% if eintrag.gesperrt %}<span class="flash error" style="display:inline-block;margin:0;">{{ eintrag.gesperrt }}</span>
+        {% else %}<button class="btn primary" type="submit">Speichern &amp; nächste Startnummer</button>{% endif %}
         <span class="note">
           {% if not eintrag.ist_stafette %}Ergebnis: <strong id="live">–</strong>
           {% if eintrag.einheit %}{{ eintrag.einheit }}{% endif %} · <span class="muted">DNS/DNF möglich</span>

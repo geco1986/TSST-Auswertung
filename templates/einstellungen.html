@@ -19,7 +19,7 @@
     <button type="button" data-teil="stammdaten">Stammdaten</button>
     {% if ist_superuser %}<button type="button" data-teil="import">Import Excel</button>{% endif %}
     <button type="button" data-teil="sicherung">Datensicherung</button>
-    {% if ist_superuser %}<button type="button" data-teil="superuser">Superuser</button>{% endif %}
+    {% if ist_superuser %}<button type="button" data-teil="superuser">Passwörter</button>{% endif %}
   </nav>
   <div class="tab-teil" data-teil="anlaesse">
     <div class="cards">
@@ -73,13 +73,34 @@
       <input type="password" name="neu2" placeholder="Neues Passwort wiederholen" autocomplete="new-password">
       <button class="btn primary" type="submit">Passwort ändern</button>
     </form>
+    <h3>Chef-Passwort {% if chef_gesetzt %}<span class="pill">festgelegt</span>{% else %}<span class="pill">fehlt – Chef-Login gesperrt</span>{% endif %}</h3>
+    <form method="post" action="{{ url_for('passwoerter') }}" class="stack">
+      <input type="hidden" name="was" value="chef">
+      <input type="password" name="neu" placeholder="Neues Chef-Passwort (mind. 6 Zeichen)" autocomplete="new-password">
+      <input type="password" name="neu2" placeholder="Chef-Passwort wiederholen" autocomplete="new-password">
+      <button class="btn primary" type="submit">Chef-Passwort {{ 'ändern' if chef_gesetzt else 'festlegen' }}</button>
+    </form>
+    <h3>Eingeber-PIN {% if pin_gesetzt %}<span class="pill">festgelegt</span>{% else %}<span class="pill">keine – Anmeldung ohne PIN</span>{% endif %}</h3>
+    <p class="muted" style="font-size:13px;">Optional: eine gemeinsame PIN für alle Eingeber, z. B. am Wettkampftag bekanntgeben.</p>
+    <form method="post" action="{{ url_for('passwoerter') }}" class="stack">
+      <input type="hidden" name="was" value="pin">
+      <input type="password" name="neu" placeholder="Neue PIN (mind. 4 Zeichen)" autocomplete="new-password" inputmode="numeric">
+      <input type="password" name="neu2" placeholder="PIN wiederholen" autocomplete="new-password" inputmode="numeric">
+      <div class="btn-row">
+        <button class="btn primary" type="submit">PIN {{ 'ändern' if pin_gesetzt else 'festlegen' }}</button>
+        {% if pin_gesetzt %}<button class="btn" type="submit" name="entfernen" value="1">PIN entfernen</button>{% endif %}
+      </div>
+    </form>
   </div>
   {% endif %}
   <div class="tab-teil card" data-teil="sicherung">
     <h3 style="margin-top:0;">Datensicherung</h3>
     <p><a class="btn" href="{{ url_for('backup') }}">Backup herunterladen</a></p>
     <p class="muted" style="font-size:13px;">Datenbank: <span class="mono">{{ db_pfad }}</span><br>
-      Vor jedem Import wird automatisch eine Kopie neben der Datenbank abgelegt (<span class="mono">…sqlite3.vor-…bak</span>).</p>
+      Vor jedem Import wird automatisch eine Kopie neben der Datenbank abgelegt (<span class="mono">…sqlite3.vor-…bak</span>).<br>
+      {% if auto_sicherung %}Automatische Sicherung alle {{ auto_sicherung }} Minuten (nur bei Änderungen) nach
+      <span class="mono">{{ sicherungs_ordner }}</span>.{% else %}Automatische Sicherung ist ausgeschaltet
+      (<span class="mono">DEBRA_SICHERUNG_MINUTEN=0</span>).{% endif %}</p>
   </div>
 </section>
 

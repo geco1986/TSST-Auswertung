@@ -14,19 +14,34 @@
     <form method="post" class="stack">
       <div>
         <label for="kennung">Kennung / Station</label>
-        <input type="text" id="kennung" name="kennung" placeholder="z. B. Eingabe 1" autocomplete="off">
-        <p class="muted" style="margin:6px 0 0; font-size:12px;">Wird bei jeder Eingabe protokolliert (für die 4-Augen-Kontrolle).</p>
+        <input type="text" id="kennung" name="kennung" placeholder="z. B. Eingabe 1" autocomplete="off" value="{{ kennung or '' }}">
+        <p class="muted" style="margin:6px 0 0; font-size:12px;">Wird bei jeder Eingabe protokolliert (für die 4-Augen-Kontrolle):
+          bitte eine eigene Kennung je Person bzw. Station. Eigene Eingaben kann man nicht selbst quittieren.</p>
       </div>
       <div>
         <label>Rolle wählen</label>
         <p class="muted" style="margin:0 0 12px; font-size:13px;">
-          <strong>Eingeber</strong>: Teilnehmer und Resultate erfassen.<br>
-          <strong>Chef</strong>: zusätzlich Ranglisten, Stafetten-Selektion und Einstellungen – nur im aktiven Anlass.<br>
+          <strong>Eingeber</strong>: Teilnehmer und Resultate erfassen{% if pin_gesetzt %} (mit PIN){% endif %}.<br>
+          <strong>Chef</strong>: zusätzlich Ranglisten, Stafetten-Selektion und Einstellungen – nur im aktiven Anlass (mit Passwort).<br>
           <strong>Superuser</strong>: wählt den aktiven Anlass, pflegt die JET-Wertungsformeln (mit Passwort).</p>
       </div>
+      {% if pin_gesetzt %}
+        <input type="password" name="pin" placeholder="Eingeber-PIN" autocomplete="current-password" inputmode="numeric">
+      {% endif %}
       <button class="btn primary" type="submit" name="rolle" value="eingeber" style="width:100%;">Als Eingeber anmelden</button>
-      <button class="btn" type="submit" name="rolle" value="chef" style="width:100%;">Als Chef anmelden</button>
-      <details class="superuser-login" {{ 'open' if super_offen }}>
+      <details class="superuser-login" {{ 'open' if offen == 'chef' }}>
+        <summary>Als Chef anmelden</summary>
+        <div class="stack" style="margin-top:10px;">
+          {% if chef_gesetzt %}
+            <input type="password" name="chef_passwort" placeholder="Chef-Passwort" autocomplete="current-password">
+            <button class="btn" type="submit" name="rolle" value="chef" style="width:100%;">Als Chef anmelden</button>
+          {% else %}
+            <p class="muted" style="margin:0; font-size:13px;">Noch kein Chef-Passwort festgelegt. Der Superuser legt es
+              unter Einstellungen → Allgemein → Passwörter fest.</p>
+          {% endif %}
+        </div>
+      </details>
+      <details class="superuser-login" {{ 'open' if offen == 'superuser' }}>
         <summary>Als Superuser anmelden</summary>
         <div class="stack" style="margin-top:10px;">
           {% if pw_gesetzt %}
@@ -40,6 +55,16 @@
         </div>
       </details>
     </form>
+    <script>
+    // Enter in einem Passwortfeld meldet mit der Rolle dieses Abschnitts an (nicht als Eingeber)
+    document.querySelectorAll('details input[type=password]').forEach(function(inp){
+      inp.addEventListener('keydown', function(e){
+        if(e.key !== 'Enter') return;
+        var btn = inp.closest('details').querySelector('button[name=rolle]');
+        if(btn){ e.preventDefault(); btn.click(); }
+      });
+    });
+    </script>
   </div>
 </div>
 {% endblock %}

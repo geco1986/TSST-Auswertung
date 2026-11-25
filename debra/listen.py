@@ -655,6 +655,8 @@ def ausgeben(conn, wk, name, fmt, args):
         liste = eintrag["liste"](conn, wk, args) if eintrag["liste"] else None
         basis = liste.dateiname if liste else f"{eintrag['titel']}"
     else:
+        if not eintrag["liste"]:
+            raise LookupError(f"{name}: nur als PDF verfügbar")
         liste = eintrag["liste"](conn, wk, args)
         daten = A.pdf(liste, wk, opt) if fmt == "pdf" else A.xlsx(liste, wk, opt)
         basis = liste.dateiname

@@ -16,7 +16,7 @@
           <td>{% if w.aktiv %}<span class="kranz">● aktiv</span>{% else %}<span class="pill">inaktiv</span>{% endif %}</td>
           <td class="right btn-row" style="justify-content:flex-end;">
             {% if ist_superuser %}
-            {% if not w.aktiv %}<a class="btn sm" href="{{ url_for('wettkampf_aktiv', wid=w.id) }}">Aktivieren</a>{% endif %}
+            {% if not w.aktiv %}<form method="post" action="{{ url_for('wettkampf_aktiv', wid=w.id) }}"><button class="btn sm" type="submit">Aktivieren</button></form>{% endif %}
             <form method="post" action="{{ url_for('wettkampf_loeschen', wid=w.id) }}" onsubmit="return confirm('Wettkampf inkl. aller Daten löschen?')">
               <button class="btn sm danger" type="submit">Löschen</button>
             </form>

@@ -19,6 +19,7 @@
     <a class="btn primary" href="{{ url_for('teilnehmer_form') }}">Anmeldung erfassen</a>
   </div>
 {% else %}
+{% if gesperrt %}<div class="flash error">{{ gesperrt }}</div>{% endif %}
 <form method="post" id="erf">
   <div class="table-wrap erfassung">
     <table id="grid">
@@ -50,7 +51,8 @@
               <input type="text" inputmode="decimal" class="note-in"
                 name="note_{{ t.id }}_{{ p }}"
                 value="{{ werte[(t.id,p)] if (t.id,p) in werte else '' }}"
-                data-tid="{{ t.id }}" data-col="{{ loop.index0 }}">
+                data-tid="{{ t.id }}" data-col="{{ loop.index0 }}"{{ ' disabled' if gesperrt }}>
+              <input type="hidden" name="orig_note_{{ t.id }}_{{ p }}" value="{{ werte[(t.id,p)] if (t.id,p) in werte else '' }}">
             </td>
           {% endfor %}
           <td class="num total" id="total_{{ t.id }}">-</td>
@@ -61,7 +63,7 @@
   </div>
 
   <div class="savebar">
-    <button class="btn primary" type="submit">Resultate speichern</button>
+    <button class="btn primary" type="submit"{{ ' disabled' if gesperrt }}>Resultate speichern</button>
     <span class="note">
       {% if anzahl_werte and anzahl_werte > 1 %}Pro Gruppe {{ anzahl_werte }} Einzelleistungen{% if einheit %} in {{ einheit }}{% endif %}. {% endif %}
       Tipp: mit <strong>Enter</strong> zur nächsten Gruppe in derselben Spalte springen.</span>

@@ -98,7 +98,8 @@
             <tr>
               <td><label for="w_{{ t.id }}_{{ a }}"><strong>{{ D[a][0] }}</strong> <span class="muted">{{ a }}</span></label></td>
               <td class="num"><input type="text" inputmode="decimal" class="note-in" id="w_{{ t.id }}_{{ a }}"
-                     name="w_{{ t.id }}_{{ a }}" value="{{ c.wert }}" data-abk="{{ a }}" autocomplete="off"></td>
+                     name="w_{{ t.id }}_{{ a }}" value="{{ c.wert }}" data-abk="{{ a }}" autocomplete="off">
+                     <input type="hidden" name="orig_w_{{ t.id }}_{{ a }}" value="{{ c.wert }}"></td>
               <td class="muted einheit">{{ 'Note' if gr == 'geraete' else D[a][2] }}</td>
               <td class="num"><span class="jet-note {{ 'gestrichen' if c.gestrichen }} {{ 'falsch' if c.falsch }}"
                      id="n_{{ t.id }}_{{ a }}">{% if c.note is not none %}{{ '%.2f'|format(c.note) }}{% endif %}</span></td>
@@ -161,6 +162,7 @@
             <td class="num gr-{{ D[a][1] }}">
               <input type="text" inputmode="decimal" class="note-in" name="w_{{ t.id }}_{{ a }}" value="{{ c.wert }}"
                      data-abk="{{ a }}" data-col="{{ loop.index0 }}" autocomplete="off">
+              <input type="hidden" name="orig_w_{{ t.id }}_{{ a }}" value="{{ c.wert }}">
               <div class="jet-note {{ 'gestrichen' if c.gestrichen }} {{ 'falsch' if c.falsch }}" id="n_{{ t.id }}_{{ a }}">
                 {%- if D[a][1] != 'geraete' and c.note is not none %}{{ '%.2f'|format(c.note) }}{% endif -%}
               </div>
